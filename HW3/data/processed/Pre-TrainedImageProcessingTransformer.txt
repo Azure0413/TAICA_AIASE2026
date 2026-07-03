@@ -1,0 +1,625 @@
+Pre-Trained Image Processing Transformer Hanting Chen1,2, Yunhe Wang2*, Tianyu Guo1,2, Chang Xu3, Yiping Deng4, Zhenhua Liu2,5,6, Siwei Ma5,6, Chunjing Xu2, Chao Xu1, Wen Gao5,6 1 Key Lab of Machine Perception (MOE), Dept. of Machine Intelligence, Peking University. 2 Noah’s Ark Lab, Huawei Technologies.
+3 School of Computer Science, Faculty of Engineering, The University of Sydney. 4 Central Software Institution, Huawei Technologies.
+5 Institute of Digital Media, School of Electronic Engineering and Computer Science, Peking University. 6 Peng Cheng Laboratory.
+htchen@pku.edu.cn, yunhe.wang@huawei.com
+Abstract As the computing power of modern hardware is in- creasing strongly, pre-trained deep learning models (e.g., BERT, GPT-3) learned on large-scale datasets have shown their effectiveness over conventional methods.
+The big progress is mainly contributed to the representation abil- ity of transformer and its variant architectures.
+In this paper, we study the low-level computer vision task (e.g., denoising, super-resolution and deraining) and develop a new pre-trained model, namely, image processing trans- former (IPT). To maximally excavate the capability of trans- former, we present to utilize the well-known ImageNet benchmark for generating a large amount of corrupted image pairs.
+The IPT model is trained on these images with multi-heads and multi-tails.
+In addition, the con- trastive learning is introduced for well adapting to differ- ent image processing tasks.
+The pre-trained model can therefore efﬁciently employed on desired task after ﬁne- tuning. With only one pre-trained model, IPT outperforms the current state-of-the-art methods on various low-level benchmarks. Code is available at https://github.
+com/huawei-noah/Pretrained-IPT and https:
+//gitee.com/mindspore/mindspore/tree/ master/model_zoo/research/cv/IPT
+1. Introduction Image processing is one component of the low-level part of a more global image analysis or computer vision system.
+Results from the image processing can largely inﬂuence the subsequent high-level part to perform recognition and un- derstanding of the image data. Recently, deep learning has been widely applied to solve low-level vision tasks, such as image super-resolution, inpainting, deraining and coloriza- tion. As many image processing tasks are related, it is nat- *Corresponding author
+26.6
+26.7
+26.8
+26.9
+27.1
+27.2
+27.3
+HAN (ECCV 2020)
+IPT
+31.5
+31.6
+31.7
+31.8
+31.9
+32.1
+RDN (CVPR 2018)
+IPT 0.3dB↑ 0.4dB↑ Denoising (30) Denoising (50) Deraining
+33.1
+33.2
+33.3
+33.4
+33.5
+33.6
+33.7
+33.8
+HAN (ECCV 2020)
+IPT
+39.5
+40.5
+41.5 RCDNet (CVPR 2020)
+IPT
+28.9
+29.1
+29.2
+29.3
+29.4
+29.5
+29.6
+HAN (ECCV 2020)
+IPT
+28.95
+29.1
+29.25
+29.4
+29.55
+29.7
+29.85
+RDN (CVPR 2018)
+IPT SISR x2 SISR x3 SISR x4 0.4dB↑ 0.4dB↑ 0.4dB↑ 1.6dB↑
+Figure 1. Comparison on the performance of the proposed IPT and the state-of-the-art image processing models on different tasks.
+ural to expect a model pre-trained on one dataset can be helpful for another. But few studies have generalized pre- training across image processing tasks.
+Pre-training has the potential to provide an attractive so- lution to image processing tasks by addressing the follow- ing two challenges: First, task-speciﬁc data can be limited.
+This problem is exacerbated in image processing task that involves the paid-for data or data privacy, such as medical images [8] and satellite images [83]. Various inconsistent factors (e.g. camera parameter, illumination and weather) can further perturb the distribution of the captured data for training. Second, it is unknown which type of image pro- cessing job will be requested until the test image is pre- sented. We therefore have to prepare a series of image pro- cessing modules at hand. They have distinct aims, but some underlying operations could be shared.
+It is now common to have pre-training in natural lan- guage processing and computer vision [12]. For example, the backbones of object detection models [98, 97] are of- ten pre-trained on ImageNet classiﬁcation [18]. A num-
+
+ber of well-trained networks can now be easily obtained from the Internet, including AlexNet [43], VGGNet [63] and ResNet [34].
+The seminal work Transformers [70] have been widely used in many natural language process- ing (NLP) tasks, such as translation [73] and question- answering [66].
+The secret of its success is to pre-train transformer-based models on a large text corpus and ﬁne- tune them on the task-speciﬁc dataset. Variants of Trans- formers, like BERT [19] and GPT-3 [5], further enriched the training data and improved the pre-training skills. There have been interesting attempts on extending the success of Transformers to the computer vision ﬁeld. For example, Wang et al. [71] and Fu et al. [25] applied the self-attention based models to capture global information on images. Car- ion et al. [7] proposed DERT to use transformer architec- tures for an end-to-end object detection.
+Most recently, Dosovitskiy et al. [22] introduced Vision Transformer (ViT) to treat input images as 16×16 words and attained excellent results on image recognition.
+The aforementioned pre-training in computer vision and natural language mostly investigate a pretest classiﬁcation task, but both the input and the output in an image pro- cessing task are images. A straightforward application of these existing pre-training strategies might not be feasible.
+Further, how to effectively address different target image processing tasks in the pre-training stage remains a hard challenge. It is also instructive to note that the pre-training of image processing models enjoys a convenience of self- generating training instances based on the original real im- ages. The synthetically manipulated images are taken for training, while the original image itself is the ground-truth to be reconstructed.
+In this paper, we develop a pre-trained model for im- age processing using the transformer architecture, namely, Image Processing Transformer (IPT). As the pre-trained model needs to be compatible with different image process- ing tasks, including super-resolution, denoising, and derain- ing, the entire network is composed of multiple pairs of head and tail corresponding to different tasks and a sin- gle shared body. Since the potential of transformer needs to be excavated using large-scale dataset, we should pre- pair a great number of images with considerable diversity for training the IPT model. To this end, we select the Im- ageNet benchmark which contains various high-resolution with 1,000 categories. For each image in the ImageNet, we generate multiple corrupted counterparts using several carefully designed operations to serve different tasks. For example, training samples for the super-resolution task are generated by downsampling original images. The entired dataset we used for training IPT contains about over 10 mil- lions of images.
+Then, the transformer architecture is trained on the huge dataset as follows. The training images are input to the speciﬁc head, and the generated features are cropped into patches (i.e., “words”) and ﬂattened to sequences subse- quently. The transformer body is employed to process the ﬂattened features in which position and task embedding are utilized for encoder and decoder, respectively. In addition, tails are forced to predict the original images with differ- ent output sizes according to the speciﬁc task. Moreover, a contrastive loss on the relationship between patches of different inputs is introduced for well adopting to differ- ent image processing tasks. The proposed image processing transformer is learned in an end-to-end manner. Experimen- tal results conducted on several benchmarks show that the pre-trained IPT model can surpass most of existing meth- ods on their own tasks by a signiﬁcant enhancement after ﬁne-tuning.
+2. Related Works 2.1. Image Processing Image processing consists of the manipulation of im- ages, including super-resolution, denoising, dehazing, de- raining, debluring, etc. There are a variety of deep-learning- based methods proposed to conduct on one or many kinds of image processing tasks. For the super-resolution, Dong et al. propose SRCNN [20, 21] which are considered as pio- neering works introducing end-to-end models that recon- structs HR images from their LR counterparts.
+Kim et al. [41] further explore the capacity of deep neural network with a more deeper convolutional network. Ahn et al. [2] and Lim et al. [50] propose introduce residual block into SR task. Zhang et al. [92] and Anwar and Barnes [3] utilize the power of attention to enhance the performance on SR task. A various excellent works are also proposed for the other tasks, such as denoising [68, 32, 37, 45, 24], dehaz- ing [6, 46, 85, 80], deraining [36, 78, 62, 29, 74, 47], and debluring [67, 53, 23, 10]. Different from above methods, we dig the capacity of both big models and huge volume of data. Then a pre-training model handling several image processing tasks is introduced.
+2.2. Transformer Transformer [70] and its variants have proven its suc- cess being powerful unsupervised or self-supervised pre- training frameworks in various natural language processing tasks. For example, GPTs [59, 60, 5] are pre-trained in a autoregressive way that predicting next word in huge text datasets. BERT [19] learns from data without explicit su- pervision and predicts a masking word based on context.
+Colin et al. [61] proposes a universal pre-training frame- work for several downstream tasks. Yinhan et al. [52] pro- poses a robust variant for original BERT.
+Due to the success of Transformer-based models in the NLP ﬁeld, there are many attempts to explore the beneﬁts
+
+Reshape Transformer Encoder Multi-head Multi-tail Features Features Flatten features Task embedding
+… Denoising
+Head Deraining
+Head
+x2 Up
+Head
+x4 Up
+Head
+…
+x4 Up
+Tail Denoising
+Tail Deraining
+Tail
+x2 Up
+Tail
+…
+… Transformer Decoder
+Figure 2. The diagram of the proposed image processing transformer (IPT). The IPT model consists of multi-head and multi-tail for different tasks and a shared transformer body including encoder and decoder. The input images are ﬁrst converted to visual features and then divided into patches as visual words for subsequent processing. The resulting images with high visual quality are reconstructed by ensembling output patches.
+of Transformer in computer vision tasks. These attempts can be roughly divided into two types. The ﬁrst is to intro- duce self-attention into the traditional convolutional neural network. Yuan et al. [82] introduce spatial attention for im- age segmentation. Fu et al. [26] proposes DANET utiliz- ing the context information by combining spatial and chan- nel attention. Wang et al. [75], Chen et al. [15], Jiang et al. [38] and Zhang et al. [91] also augment features by self- attention to enhance model performance on several high- level vision tasks. The other type is to replace convolu- tional neural network with self-attention block.
+For in- stance, Kolesnikov et al. [42] and Dosovitskiy [22] con- duct image classiﬁcation with transformer block. Carion et al. [7] and Zhu et al. [100] implement transformer-based models in detection. Chen et al. [11] proposes a pre-trained GPT model for generative and classiﬁcation tasks. Wu et al. [77] and Zhao et al. [96] propose pre-training methods for teansformer-based models for image recognition task.
+Jiang et al. [39] propose the TransGAN to generate images using Transformer. However, few related works focus on low-level vision tasks. In this paper, we explore a universal pre-training approach for image processing tasks.
+3. Image Processing Transformer To excavate the potential use of transformer on im- age processing tasks for achieving better results, here we present the image processing transformer by pre-training on large-scale dataset.
+3.1. IPT architecture The overall architecture of our IPT consists of four com- ponents: heads for extracting features from the input cor- rupted images (e.g., images with noise and low-resolution images), an encoder-decoder transformer is established for recovering the missing information in input data, and tails are used formapping the features into restored images. Here we brieﬂy introduce our architecture, details can be found in the supplementary material.
+Heads. To adjust different image processing task, we use a multi-head architecture to deal with each task separately, where each head consists of three convolutional layers. De- note the input image as x ∈R3×H×W (3 means R, G, and B), the head generates a feature map fH ∈RC×H×W with C channels and same height and width (typical we use C = 64). The calculation can be formulated as fH = Hi(x), where Hi (i = {1, . . . , Nt}) denote the head for the ith task and Nt denotes the number of tasks.
+Transformer encoder. Before input features into the transformer body, we split the given features into patches and each patch is regarded as a ”word”. Speciﬁcally, the features fH ∈RC×H×W are reshaped into a sequence of patches, i.e., fpi ∈RP 2×C, i = {1, . . . , N}, where N = HW P 2 is the number of patches (i.e., the length of se- quence) and P is patch size. To maintain the position in- formation of each patch, we add learnable position encod- ings Epi ∈RP 2×C for each patch of feature fpi follow- ing [22, 7], and Epi + fpi will be directly input into the transformer encoder. The architecture of encoder layer is
+
+following the original structure in [70], which has a multi- head self-attention module and a feed forward network. The output of encoder fEi ∈RP 2×C for each patch has the same size to that of the input patch fpi. The calculation can be formulated as y0 = [Ep1 + fp1, Ep2 + fp2, . . . , EpN + fpN ] , qi = ki = vi = LN(yi−1),
+y′ i = MSA(qi, ki, vi) + yi−1, yi = FFN(LN(y′ i)) + y′
+i, i = 1, . . . , l [fE1, fE2, . . . , fEN ] = yl,
+(1) where l denotes the number of layers in the encoder, MSA denotes the multi-head self-attention module in the conven- tional transformer model [70], LN denotes the layer nor- malization [4] and FFN denotes the feed forward network, which contains two fully connected layers.
+Transformer decoder.
+The decoder also follows the same architecture and takes the output of decoder as input in the transformer body, which consists of two multi-head self-attention (MSA) layers and one feed forward network (FFN). The difference to that of the original transformer here is that we utilize a task-speciﬁc embedding as an addi- tional input of the decoder. These task-speciﬁc embeddings
+Ei t ∈RP 2×C, i = {1, . . . , Nt} are learned to decode fea- tures for different tasks. The calculation of decoder can be formulated as:
+z0 = [fE1, fE2, . . . , fEN ] , qi = ki = LN(zi−1) + Et, vi = LN(zi−1),
+z′ i = MSA(qi, ki, vi) + zi−1,
+q′ i = LN(z′ i) + Et, k′ i = v′ i = LN(z0),
+z′′ i = MSA(q′
+i, k′
+i, v′ i) + z′
+i, zi = FFN(LN(z′′ i )) + z′′
+i , i = 1, . . . , l [fD1, fD2, . . . , fDN ] = yl,
+(2) where fDi ∈RP 2×C denotes the outputs of decoder. The decoded N patched features with size P 2 × C are then re- shaped into the features fD with size C × H × W.
+Tails. The properties of tails are same as those of heads, we use multi tails to deal with different tasks. The cal- culation can be formulated as fT = T i(fD), where T i (i = {1, . . . , Nt}) denote the head for the ith task and Nt denotes the number of tasks. The output fT is the resulted images size of 3 × H′ × W ′ which is determined by the speciﬁc task. For example, H′ = 2H, W = 2W for a 2× super-resolution task.
+3.2. Pre-training on ImageNet Besides the architecture of transformer itself, one of the key factors for successfully training an excellent trans- former is that the well use of large-scale datasets. Compared with image classiﬁcation, the number of available data used for image processing task is relatively small (e.g., only 2000 images on DIV2K dataset for the image super-resolution task), we propose to utilize the well-known ImageNet as the baseline dataset for pre-training our IPT model, then we generate the entire dataset for several tasks (e.g., super- resolution and denosing) as follows.
+As the images in the ImageNet benchmark are of high diversity, which contains over 1 million of natural images from 1,000 different categories. These images have abun- dant texture and color information.
+We ﬁrst remove the semantic label and manually synthesize a variety of cor- rupted images from these unlabeled images with a variety of degradation models for different tasks. Note that synthe- sized dataset is also usually used in these image processing tasks and we use the same degeneration methods as sug- gested in [31, 1]. For example, super-resolution tasks often take bicubic degradation to generate low-resolution images, denoising tasks add Gaussian noise in clean images with different noise level to generate the noisy images. These synthesized images can signiﬁcantly improve the perfor- mance of learned deep networks including both CNN and transformer architectures, which will be shown in the exper- iment part. Basically, the corrupted images are synthesized
+as:
+Icorrupted = f(Iclean),
+(3) where f denotes the degradation transformation, which is depended on the speciﬁc task: for the super-resolution task, f sr is exactly the bicubic interpolation; for image denois- ing, f noise(I) = I + η, where η is the additive Gaussian noise; for deraining, f rain(I) = I +r in which r is a hand- crafted rain streak. The loss function for learning our IPT in the supervised fashion can be formulated as:
+Lsupervised =
+Nt
+X
+i=1 L1(IPT(Ii corrupted), Iclean),
+(4) where L1 denote the conventional L1 loss for reconstructing desired images and Ii corrupted denote the corrupted image for task i, respectively. In addition, Eq. 4 implies that the proposed framework is trained with multiple image process tasks simultaneously. Speciﬁcally, for each batch, we ran- domly select one task from Nt supervised tasks for train- ing and each task will be processed using the correspond- ing head, tail and task embedding, simultaneously. After the pre-training the IPT model, it will capture the intrin- sic features and transformations for a large variety of image processing tasks thus can be further ﬁne-tuned to apply on the desired task using the new provided dataset. Moreover, other heads and tails will be dropped for saving the compu- tation costs and parameters in the remained head, tail and body will be updated according to the back-propagation.
+However, due to the variety of degradation models, we cannot synthesize images for all image processing tasks.
+
+For example, there is a wide range of possible noise lev- els in practice.
+Therefore, the generalization ability of the resulting IPT should be further enhanced. Similar to the pre-training natural language processing models, the relationship between patches of images is also informa- tive. The patch in image scenario can be considered as a word in natural language processing. For example, patches cropped from the same feature map are more likely to ap- pear together, which should be embedded into similar posi- tions. Therefore, we introduce contrastive learning [13, 33] for learning universal features so that the pre-trained IPT model can be utilized to unseen tasks. In practice, denote the output patched features generated by IPT decoder for the given input xj as f j Di ∈RP 2×C, i = {1, . . . , N}, where xj is selected from a batch of training images X = {x1, x2, . . . , xB}. We aims to minimize the distance be- tween patched features from the same images while max- imize the distance between patches from different images.
+The loss function for contrastive learning is formulated as:
+l(f j Di1, f j Di2) = −log exp(d(f j Di1, f j
+Di2))
+PB k=1 Ik̸=jexp(d(f j Di1, f k
+Di2))
+, Lconstrastive =
+BN 2
+N
+X
+i1=1
+N
+X
+i2=1
+B
+X
+j=1
+l(f j Di1, f j
+Di2),
+(5) where d(a, b)
+=
+aT b ∥a∥∥b∥denotes the cosine similarity.
+Moreover, to make fully usage of both supervised and self- supervised information, we reformulate the loss function as:
+LIP T = λ · Lcontrastive + Lsupervised.
+(6) Wherein, we combine the λ-balanced contrastive loss with the supervised loss as the ﬁnal objective function of IPT.
+Thus, the proposed transformer network trained using Eq. 6 can be effectively exploited on various existing image pro- cessing tasks.
+4. Experiments In this section, we evaluate the performance of the pro- posed IPT on various image processing tasks including super-resolution and image denoising. We show that the pre-trained IPT model can achieve state-of-the-art perfor- mance on these tasks. Moreover, extensive experiments for ablation study show that the transformer-based models per- form better than convolutional neural networks when us- ing the large-scale dataset for solving the image processing problem.
+Datasets. To obtain better pre-trained results of the IPT model, we use the well-known ImageNet dataset, which consists of over 1M color images of high diversity. The training images are cropped into 48 × 48 patches with 3 channels for training, i.e., there are over 10M patches for training the IPT model. We then generate the corrupted im- ages with 6 types of degradation: 2×, 3×, 4× bicubic inter- polation, 30, 50 noise level Gaussian noise and adding rain- streaks, respectively. For the rain-streak generation, we fol- low the method described in [79]. During the test, we crop the images in the test set into 48 × 48 patches with a 10 pixels overlap. Note that the same testing strategy is also adopted for CNN based models for a fair comparison, and the resulting PSNR values of CNN models are the same as that of their baselines.
+Training & Fine-tuning. We use 32 Nvidia NVIDIA Tesla V100 cards to train our IPT model using the conven- tional Adam optimizer with β1 = 0.9, β2 = 0.999 for 300 epochs on the modiﬁed ImageNet dataset. The initial learn- ing rate is set as 5e−5 and decayed to 2e−5 in 200 epoch with 256 batch size. Since the training set consists of dif- ferent tasks, we cannot input all of them in a single batch due to the expensive memory cost. Therefore, we stack a batch of images from a randomly selected task in each iter- ation. After pre-training on the entire synthesized dataset, we ﬁne-tune the IPT model on the desired task (e.g., ×3 single image super-resolution) for 30 epochs with a learn- ing rate of 2e−5. Note that SRCNN [20] also found that using ImageNet training can bring up the performance of the super-resolution task, while we propose a model ﬁtting general low-level vision tasks.
+4.1. Super-resolution We compare our model with several state-of-the-art CNN-based SR methods. As shown in Table 1, our pre- trained IPT outperforms all the other methods and achieves the best performance in ×2, ×3, ×4 scale on all datasets.
+It is worth to highlight that our model achieves 33.76dB PSNR on the ×2 scale Urban100 dataset, which surpasses other methods with more than ∼0.4dB, while previous SOTA methods can only achieve a <0.2dB improvement compared with others, which indicates the superiority of the proposed model by utilizing large scale pre-training.
+We further present the visualization results on our model in 4× scale on Urban100 dataset. As shown in Figure 3, it is difﬁcult for recover the original high resolution images since lots of information are lost due to the high scaling factor. Previous methods generated blurry images, while the super-resolution images produced by our model can well recover the details from the low-resolution images.
+4.2. Denoising Since our pre-trained model can be well adapt to many tasks, we then evaluate the performance of our model on image denoising task. The training and testing data is gen- erated by adding Gaussian noise with σ = 30, 50 to the clean images.
+To verify the effectiveness of the proposed method,
+
+Urban100 (×4): img 004
+HR VDSR [41] EDSR [51] RDN [94] OISR [35] SAN [17] RNAN [93] IGNN [99] IPT (ours) Urban100 (4×):img 012
+HR Bicubic VDSR [41] EDSR [51] RDN [94] OISR [35] SAN [17] RNAN [93] IGNN [99] IPT (ours) Urban100 (4×): img 044
+HR Bicubic VDSR [41] EDSR [51] RDN [94] OISR [35] SAN [17] RNAN [93] IGNN [99] IPT (ours)
+Figure 3. Visual results with bicubic downsampling (×4) from Urban100. The proposed method recovers more details. Compared images are derived from [99].
+BSD68: 163085
+GT Noisy (σ=50) CBM3D [16] TNRD [14] RDN [94] DnCNN [87] MemNet [65] IRCNN [88] FFDNet [89] IPT (ours)
+Figure 4. Color image denoising results with noise level σ = 50. Compared images are derived from [90].
+we compare our results with various state-of-the-art mod-
+els.
+Table 2 reported the color image denoising results on BSD68 and Urban100 dataset.
+As a result, our IPT achieves the best results among all denoising methods on different Gaussian noise level. Moreover, we surprisingly found that our model improve the state-of-the-art perfor- mance by ∼0.3dB on the Urban100 dataset, which demon- strate the effectiveness of pre-training and the superiority of our transformer-based model.
+Figure 4 shows the visualization of the resulted images.
+As shown in the ﬁgure, noisy images are hard to be recog- nized and it is difﬁcult to recover the clean images. There- fore, existing methods fail to reconstruct enough details and generate abnormal pixels. As a result, our pre-trained model can well recover several details in the hair of this cat and our visual quality beats all the previous models obviously.
+4.3. Deraining For the image deraining task, we evaluate our model on the synthesized Rain100L dataset [79], which consists of 100 rainy images. Quantitative results can be viewed in
+Table 3. Compared with the state-of-the-art methods, we achieve the best performance (41.62dB) with an 1.62dB im- provement.
+Figure 5 shows the visualization results. Previous meth- ods are failed to reconstruct the original clean images since they lack of image prior. As a result, our IPT model can present exactly the same image as the ground-truth and sur-
+
+Input / Groundtruth 27.37 / 0.8154
+DSC 29.34 / 0.8479
+GMM 32.38 / 0.9306
+JCAS 31.45 / 0.9151
+Clear 31.59 / 0.9380 RESCAN 41.26 / 0.9887 PReNet 37.27 / 0.9793 SPANet 35.67 / 0.9700 JORDER_E 41.11 / 0.9894
+SIRR 36.99 / 0.9692 RCDNet 42.15 / 0.9912 IPT (ours) 43.91 / 0.9922
+Figure 5. Image deraining results on the Rain100L dataset. Compared images are derived from [72].
+Table 1. Quantitative results on image super-resolution. Best and second best results are highlighted and underlined.
+Method
+Scale
+Set5
+Set14
+B100 Urban100 VDSR [41]
+×2
+37.53
+33.05
+31.90
+30.77 EDSR [51]
+×2
+38.11
+33.92
+32.32
+32.93 RCAN [92]
+×2
+38.27
+34.12
+32.41
+33.34 RDN [94]
+×2
+38.24
+34.01
+32.34
+32.89 OISR-RK3 [35]
+×2
+38.21
+33.94
+32.36
+33.03 RNAN [93]
+×2
+38.17
+33.87
+32.32
+32.73 SAN [17]
+×2
+38.31
+34.07
+32.42
+33.10 HAN [55]
+×2
+38.27
+34.16
+32.41
+33.35 IGNN [99]
+×2
+38.24
+34.07
+32.41
+33.23 IPT (ours)
+×2
+38.37
+34.43
+32.48
+33.76 VDSR [41]
+×3
+33.67
+29.78
+28.83
+27.14 EDSR [51]
+×3
+34.65
+30.52
+29.25
+28.80 RCAN [92]
+×3
+34.74
+30.65
+29.32
+29.09 RDN [94]
+×3
+34.71
+30.57
+29.26
+28.80 OISR-RK3 [35]
+×3
+34.72
+30.57
+29.29
+28.95 RNAN [93]
+×3
+34.66
+30.52
+29.26
+28.75 SAN [17]
+×3
+34.75
+30.59
+29.33
+28.93 HAN [55]
+×3
+34.75
+30.67
+29.32
+29.10 IGNN [99]
+×3
+34.72
+30.66
+29.31
+29.03 IPT (ours)
+×3
+34.81
+30.85
+29.38
+29.49 VDSR [41]
+×4
+31.35
+28.02
+27.29
+25.18 EDSR [51]
+×4
+32.46
+28.80
+27.71
+26.64 RCAN [92]
+×4
+32.63
+28.87
+27.77
+26.82 SAN [17]
+×4
+32.64
+28.92
+27.78
+26.79 RDN [94]
+×4
+32.47
+28.81
+27.72
+26.61 OISR-RK3 [35]
+×4
+32.53
+28.86
+27.75
+26.79 RNAN [93]
+×4
+32.49
+28.83
+27.72
+26.61 HAN [55]
+×4
+32.64
+28.90
+27.80
+26.85 IGNN [99]
+×4
+32.57
+28.85
+27.77
+26.84 IPT (ours)
+×4
+32.64
+29.01
+27.82
+27.26 passes all the previous algorithms in visual quality. This result substantiates the generality of the proposed model.
+Table 2. Quantitative results on color image denoising. Best and second best results are highlighted and underlined.
+Method
+BSD68 Urban100
+50
+50 CBM3D [16]
+29.73
+27.38
+30.36
+27.94 TNRD [14]
+27.64
+25.96
+27.40
+25.52 DnCNN [87]
+30.40
+28.01
+30.28
+28.16 MemNet [65]
+28.39
+26.33
+28.93
+26.53 IRCNN [88]
+30.22
+27.86
+30.28
+27.69 FFDNet [89]
+30.31
+27.96
+30.53
+28.05 SADNet [9]
+30.64
+28.32
+N/A
+N/A RDN [95]
+30.67
+28.31
+31.69
+29.29 IPT (ours)
+30.75
+28.39
+32.00
+29.71 4.4. Generalization Ability Although we can generate various corrupted images, nat- ural images are of high complexity and we cannot syn- thesize all possible images for pre-training the transformer model. However, a good pre-trained model should have the capacity for well adapting other tasks as those in the ﬁeld of NLP. To this end, we then conduct several experiments to verify the generalization ability of our model. In practice, we test corrupted images that did not include in our syn- thesized ImageNet dataset, i.e., image denoising with noisy level 10 and 70, respectively. We use the heads and tails for image denoising tasks as the pre-trained model.
+The detailed results are shown in Table 4, we compare the performance of using the pre-trained IPT model and the state-of-the-art methods for image denoising. Obviously, IPT model outperforms other conventional methods, which
+
+Table 3. Quantitative results of image deraining on the Rain100L dataset. Best and second best results are highlighted and underlined.
+Method
+Input DSC [28] GMM [49] JCAS [31] Clear [27] DDN [28]
+PSNR
+26.90
+27.34
+29.05
+28.54
+30.24
+32.38
+SSIM 0.8384 0.8494 0.8717 0.8524 0.9344 0.9258 RESCAN [48] PReNet [62] JORDER E [79] SPANet [74] SSIR [76] RCDNet [72] IPT (ours)
+38.52
+37.45
+38.59
+35.33
+32.37
+40.00
+41.62 0.9812 0.9790 0.9834 0.9694 0.9258 0.9860 0.9880
+Table 4. Generation ability of our IPT model on color image de- noising with different noise levels. Best and second best results are highlighted and underlined.
+Method
+BSD68 Urban100
+70
+70 CBM3D [16]
+35.91
+26.00
+36.00
+26.31 TNRD [14]
+33.36
+23.83
+33.60
+22.63 DnCNN [87]
+36.31
+26.56
+36.21
+26.17 MemNet [65]
+N/A
+25.08
+N/A
+24.96 IRCNN [88]
+36.06
+N/A
+35.81
+N/A FFDNet [89]
+36.14
+26.53
+35.77
+26.39 RDN [95]
+36.47
+26.85
+36.69
+27.63 IPT (ours)
+36.53
+26.92
+36.99
+27.90
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0 Percentage of Usage of ImageNet (1.1M Images)
+32.8
+33.0
+33.2
+33.4
+33.6
+33.8 PSNR (dB)
+IPT
+EDSR
+IGNN
+RDN
+Figure 6. The performance of CNN and IPT models using different percentages of data.
+demonstrates that the pre-trained model can capture more useful information and features from the large-scale dataset.
+4.5. Ablation Study Impact of data percentage. To evaluate the effective- ness of the transformer architecture, we conduct experi- ments to analyse the improvement of pre-training on CNN- based model and transformer-based model. We use 20%, 40%, 60%, 80% and 100% percentages of the synthesized ImageNet dataset to analyse the impact on the number of used data for resulting performance. Figure 6 shows the results of different pre-trained models. When the models are not pre-trained or pre-trained with small amount (< 60%) of the entire dataset, the CNN models achieve bet- ter performance. In contrast, when using large-scale data, the transformer-based models overwhelming CNN models, which demonstrates that the effectiveness of our IPT model for pre-training.
+Table 5. Impact of λ for contrastive learning.
+λ
+0.05
+0.1
+0.2
+0.5
+PSNR
+38.27
+38.32
+38.37
+38.33
+38.26 Impact of contrastive learning. As discussed above, to improve the representation ability of our pre-trained model, we embed the contrastive learning loss (Eq. 6) into the train- ing procedure. We then evaluate its effectiveness on the ×2 scale super-resolution task using the Set4 dataset. Table 5 shows the impact of the hyper-parameter λ for balancing the two terms in Eq. 6. When λ=0, the IPT model is trained using only a supervised learning approach, the resulting PSNR value is 38.27dB. When employing the contrastive loss for self-supervised learning, the model can achieve a 38.37dB PSNR value (λ = 0.1), which is about 0.1dB higher than that of the model trained with λ = 0. These results fur- ther demonstrate the effectiveness of the contrastive learn- ing for learning better pre-trained IPT model.
+5. Conclusions and Discussions This paper aims to address the image processing prob- lems using a pre-trained transformer model (IPT). The IPT model is designed with multi-heads,multi-tails a shared transformer body for serving different image processing task such as image super-resolution and denoising. To max- imally excavate the performance of the transformer archi- tecture on various tasks, we explore a synthesized ImageNet datesets. Wherein, each original image will be degraded to a series of counterparts as paired training data. The IPT model is then trained using supervised and self-supervised approaches which shows strong ability for capturing intrin- sic features for low-level image processing. Experimental results demonstrate that our IPT can outperform the state- of-the-art methods using only one pre-trained model after a quickly ﬁne-tuning. In the future work, we will extend our IPT model to more tasks such as inpainting, dehazing, etc.
+Acknowledgment This work is supported by National Natural Science Foundation of China under Grant No.
+61876007, and Australian Research Council under Project DE180101438 and DP210101859.
+
+A. Results on Deblurring We further evaluate the performance of our model on im- age deblurring task. We use the GoPro dataset [54] to ﬁne- tune and test our model. We modify the patch size as 256, patch dim as 8 and number of features as 9 to achieve a higher receptive ﬁeld. Table 6 reported deblurring results, where + denotes applying self-ensemble technique. As a re- sult, our IPT achieves the best results among all deblurring methods. Figure 8 shows the visualization of the resulted images. As shown in the ﬁgure, our pre-trained model can well achieve the best visual quality among all the previous models obviously.
+B. Architecture of IPT In the main paper, we propose the image processing transformer (IPT). Here we show the detailed architecture of IPT, which consists of heads, body and tails. Each head has one convolutional layer (with 3 × 3 kernel size, 3 in- put channels and 64 output channels) and two ResBlock.
+Each ResBlock consists of two convolutional layers (with 5×5 kernel size, 64 input channels and 64 output channels) which involved by a single shortcut. The body has 12 en- coder layers and 12 decoder layers. The tail of denoising or deraining is a convolutional layer with 3 × 3 kernel size, 64 input channels and 3 output channels. For super-resolution, the tail consists of one pixelshufﬂe layer with upsampling scale 2 and 3 for ×2 and ×3 SR, two pixelshufﬂe layer with upsampling scale 2 for ×4 SR.
+The whole IPT has 114M parameters and 33G FLOPs, which have more parameters while fewer FLOPs compared with traditional CNN models (e.g., EDSR has 43M param- eters and 99G FLOPs).
+C. Impact of Multi-task Training We train IPT following a multi-task manner and then ﬁne-tune it on 6 different tasks including ×2, ×3, ×4 super- resolution, denoising with noise level 30,50 and deraining.
+We ﬁnd that this training strategy would not harm the per- formance on these tasks which have been pre-trained on large scale dataset (ImageNet). In other words, the per- formance of multi-task training and single-task training re- mains almost the same. However, when transferring to other tasks (e.g., Section 4.4 in the main paper), the pre-trained model using multi-task training is better than that of single- task training for about 0.3dB, which suggests the multi-task training would learn universal representation of image pro- cessing tasks.
+D. Visualization of Embeddings We visualize the learned embeddings of IPT. Figure 7 shows the visualization results of position embeddings. We
+Figure 7. Visualization of cosine similarity of position embed- dings.
+ﬁnd that patches with similar columns or rows have similar embeddings, which indicate that they learn useful informa- tion for discovering the position on image processing. We also test to use ﬁxed embeddings or do not use embeddings, whose performance are lower than that of using learnable position embeddings (vary from 0.2dB to 0.3dB for differ- ent tasks).
+Moreover, we visualize the task embeddings in ﬁgure 9.
+We can ﬁnd that for ×2 super-resolution task, the simi- larity between the embeddings on each position and their neighbours are higher than ×3 super-resolution, while that of ×4 super-resolution is the smallest. This results indi- cates that each patches in ×2 super-resolution can focus on other patches with farther distance than ×3 and ×4, since their downsampling scale are smaller and the rela- tionship between different patches are closer. The similar- ity of task embedding for deraining in ﬁgure 9 (d) shows that the patches pay more attention on the vertical direc- tion than horizontal direction, which is reasonable as the rain is dropped vertically. The similarity of task embedding for denoising is similar with Gaussian noise, and ﬁgure 9 (f) with higher (50) noise level shows higher similarity be- tween neighbours than ﬁgure 9 (e) with 30 noise level. The visualization results suggests that our task embeddings can indeed learn some information for different tasks. We also test to not use task embeddings, which results in signiﬁ- cant accuracy drop (vary from 0.1dB to 0.5dB for different tasks).
+
+Input
+RADN
+BANet IPT(Ours)
+Figure 8. Image deblurring results on the GoPro dataset. Compared images are derived from [69].
+Table 6. Quantitative results on image deblurring. Best and second best results are highlighted and underlined.
+Method MSCNN [54] SRN [67] DSD [30] DeblurGANv2 [44] DMPHN [84] LEBMD [40] EDSD [81]
+PSNR
+30.40
+30.25
+30.96
+29.55
+31.36
+31.79
+29.81 DBGAN [86] MTRNN [57] RADN [58] SAPHN [64] BANET [69] MB2D [56] IPT (Ours) IPT+ (Ours)
+31.10
+31.13
+31.85
+32.02
+32.44
+32.16
+32.58
+32.91
+References [1] Eirikur Agustsson and Radu Timofte. Ntire 2017 challenge on single image super-resolution: Dataset and study.
+In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition Workshops, pages 126–135, 2017.
+[2] Namhyuk Ahn, Byungkon Kang, and Kyung-Ah Sohn.
+Fast, accurate, and lightweight super-resolution with cas- cading residual network. In Proceedings of the European Conference on Computer Vision (ECCV), pages 252–268,
+2018. 2 [3] Saeed Anwar and Nick Barnes. Densely residual laplacian super-resolution. IEEE Transactions on Pattern Analysis and Machine Intelligence, 2020. 2 [4] Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton.
+Layer normalization.
+arXiv preprint arXiv:1607.06450,
+2016. 4 [5] Tom B Brown, Benjamin Mann, Nick Ryder, Melanie Sub- biah, Jared Kaplan, Prafulla Dhariwal, Arvind Neelakan- tan, Pranav Shyam, Girish Sastry, Amanda Askell, et al.
+Language models are few-shot learners.
+arXiv preprint arXiv:2005.14165, 2020. 2 [6] Bolun Cai, Xiangmin Xu, Kui Jia, Chunmei Qing, and Dacheng Tao. Dehazenet: An end-to-end system for single image haze removal. IEEE Transactions on Image Process- ing, 25(11):5187–5198, 2016. 2 [7] Nicolas Carion, Francisco Massa, Gabriel Synnaeve, Nico- las Usunier, Alexander Kirillov, and Sergey Zagoruyko.
+End-to-end object detection with transformers.
+arXiv preprint arXiv:2005.12872, 2020. 2, 3 [8] Gabriella Castellano, Leonardo Bonilha, LM Li, and Fer- nando Cendes. Texture analysis of medical images. Clini- cal radiology, 59(12):1061–1069, 2004. 1 [9] Meng Chang, Qi Li, Huajun Feng, and Zhihai Xu. Spatial- adaptive network for single image denoising. arXiv preprint arXiv:2001.10291, 2020. 7 [10] Liang Chen, Faming Fang, Shen Lei, Fang Li, and Guixu Zhang. Enhanced sparse model for blind deblurring. 2020.
+[11] Mark Chen, Alec Radford, Rewon Child, Jeff Wu, Heewoo Jun, Prafulla Dhariwal, David Luan, and Ilya Sutskever.
+Generative pretraining from pixels. In Proceedings of the 37th International Conference on Machine Learning, vol- ume 1, 2020. 3
+
+(a) ×2 super-resolution (b) ×3 super-resolution (c) ×4 super-resolution (d) deraining (e) denoising with 30 noise level (f) denoising with 50 noise level
+Figure 9. Visualization of six different task embeddings.
+[12] Tianlong Chen, Jonathan Frankle, Shiyu Chang, Sijia Liu, Yang Zhang, Michael Carbin, and Zhangyang Wang. The lottery tickets hypothesis for supervised and self-supervised pre-training in computer vision models.
+arXiv preprint arXiv:2012.06908, 2020. 1 [13] Ting Chen, Simon Kornblith, Mohammad Norouzi, and Ge- offrey Hinton. A simple framework for contrastive learning of visual representations. arXiv preprint arXiv:2002.05709,
+2020. 5 [14] Yunjin Chen and Thomas Pock. Trainable nonlinear reac- tion diffusion: A ﬂexible framework for fast and effective image restoration. IEEE transactions on pattern analysis and machine intelligence, 39(6):1256–1272, 2016. 6, 7, 8 [15] Yunpeng Chen, Marcus Rohrbach, Zhicheng Yan, Yan Shuicheng, Jiashi Feng, and Yannis Kalantidis.
+Graph- based global reasoning networks.
+In Proceedings of the IEEE Conference on Computer Vision and Pattern Recog- nition, pages 433–442, 2019. 3 [16] Kostadin Dabov, Alessandro Foi, Vladimir Katkovnik, and Karen Egiazarian. Color image denoising via sparse 3d col- laborative ﬁltering with grouping constraint in luminance- chrominance space. In 2007 IEEE International Confer- ence on Image Processing, volume 1, pages I–313. IEEE,
+2007. 6, 7, 8 [17] Tao Dai, Jianrui Cai, Yongbing Zhang, Shu-Tao Xia, and Lei Zhang. Second-order attention network for single im- age super-resolution. In Proceedings of the IEEE confer- ence on computer vision and pattern recognition, pages 11065–11074, 2019. 6, 7 [18] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A large-scale hierarchical im- age database. In 2009 IEEE conference on computer vision and pattern recognition, pages 248–255. Ieee, 2009. 1 [19] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova.
+Bert:
+Pre-training of deep bidirectional transformers for language understanding.
+arXiv preprint arXiv:1810.04805, 2018. 2 [20] Chao Dong, Chen Change Loy, Kaiming He, and Xiaoou
+Tang.
+Learning a deep convolutional network for image
+
+super-resolution. In European conference on computer vi- sion, pages 184–199. Springer, 2014. 2, 5 [21] Chao Dong, Chen Change Loy, Kaiming He, and Xiaoou Tang. Image super-resolution using deep convolutional net- works. IEEE transactions on pattern analysis and machine intelligence, 38(2):295–307, 2015. 2 [22] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, et al.
+An image is worth 16x16 words:
+Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929, 2020. 2, 3 [23] Thomas Eboli, Jian Sun, and Jean Ponce. End-to-end in- terpretable learning of non-blind image deblurring. arXiv preprint arXiv:2007.01769, 2020. 2 [24] Yuchen Fan, Honghui Shi, Jiahui Yu, Ding Liu, Wei Han, Haichao Yu, Zhangyang Wang, Xinchao Wang, and Thomas S Huang. Balanced two-stage residual networks for image super-resolution.
+In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition Workshops, pages 161–168, 2017. 2 [25] Jun Fu, Jing Liu, Haijie Tian, Yong Li, Yongjun Bao, Zhi- wei Fang, and Hanqing Lu.
+Dual attention network for scene segmentation. In Proceedings of the IEEE Confer- ence on Computer Vision and Pattern Recognition, pages 3146–3154, 2019. 2 [26] Jun Fu, Jing Liu, Haijie Tian, Yong Li, Yongjun Bao, Zhi- wei Fang, and Hanqing Lu.
+Dual attention network for scene segmentation. In Proceedings of the IEEE Confer- ence on Computer Vision and Pattern Recognition, pages 3146–3154, 2019. 3 [27] Xueyang Fu, Jiabin Huang, Xinghao Ding, Yinghao Liao, and John Paisley. Clearing the skies: A deep network archi- tecture for single-image rain removal. IEEE Transactions on Image Processing, 26(6):2944–2956, 2017. 8 [28] Xueyang Fu, Jiabin Huang, Delu Zeng, Yue Huang, Xing- hao Ding, and John Paisley. Removing rain from single im- ages via a deep detail network. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pages 3855–3863, 2017. 8 [29] Xueyang Fu, Borong Liang, Yue Huang, Xinghao Ding, and John Paisley. Lightweight pyramid networks for im- age deraining. IEEE transactions on neural networks and learning systems, 2019. 2 [30] Hongyun Gao, Xin Tao, Xiaoyong Shen, and Jiaya Jia.
+Dynamic scene deblurring with parameter selective shar- ing and nested skip connections.
+In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pages 3848–3856, 2019. 10 [31] Shuhang Gu, Deyu Meng, Wangmeng Zuo, and Lei Zhang.
+Joint convolutional analysis and synthesis sparse represen- tation for single image layer separation.
+In Proceedings of the IEEE International Conference on Computer Vision, pages 1708–1716, 2017. 4, 8 [32] Shi Guo, Zifei Yan, Kai Zhang, Wangmeng Zuo, and Lei Zhang. Toward convolutional blind denoising of real pho- tographs. In Proceedings of the IEEE Conference on Com- puter Vision and Pattern Recognition, pages 1712–1722,
+2019. 2 [33] Kaiming He, Haoqi Fan, Yuxin Wu, Saining Xie, and Ross Girshick. Momentum contrast for unsupervised visual rep- resentation learning. In Proceedings of the IEEE/CVF Con- ference on Computer Vision and Pattern Recognition, pages 9729–9738, 2020. 5 [34] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun.
+Deep residual learning for image recognition. In Proceed- ings of the IEEE conference on computer vision and pattern recognition, pages 770–778, 2016. 2 [35] Xiangyu He, Zitao Mo, Peisong Wang, Yang Liu, Mingyuan Yang, and Jian Cheng.
+Ode-inspired network design for single image super-resolution. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pages 1732–1741, 2019. 6, 7 [36] Xiaowei Hu, Chi-Wing Fu, Lei Zhu, and Pheng-Ann Heng.
+Depth-attentional features for single-image rain removal. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pages 8022–8031, 2019. 2 [37] Xixi Jia, Sanyang Liu, Xiangchu Feng, and Lei Zhang. Foc- net: A fractional optimal control network for image denois- ing. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pages 6054–6063, 2019. 2 [38] Peng-Tao Jiang, Qibin Hou, Yang Cao, Ming-Ming Cheng, Yunchao Wei, and Hong-Kai Xiong. Integral object mining via online attention accumulation. In Proceedings of the IEEE/CVF International Conference on Computer Vision, pages 2070–2079, 2019. 3 [39] Yifan Jiang, Shiyu Chang, and Zhangyang Wang. Transgan:
+Two transformers can make one strong gan. arXiv preprint arXiv:2102.07074, 2021. 3 [40] Zhe Jiang, Yu Zhang, Dongqing Zou, Jimmy Ren, Jiancheng Lv, and Yebin Liu. Learning event-based motion deblurring. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pages 3320– 3329, 2020. 10 [41] Jiwon Kim, Jung Kwon Lee, and Kyoung Mu Lee. Accu- rate image super-resolution using very deep convolutional networks. In Proceedings of the IEEE conference on com- puter vision and pattern recognition, pages 1646–1654,
+2016. 2, 6, 7 [42] Alexander Kolesnikov, Lucas Beyer, Xiaohua Zhai, Joan Puigcerver, Jessica Yung, Sylvain Gelly, and Neil Houlsby.
+Big transfer (bit): General visual representation learning.
+arXiv preprint arXiv:1912.11370, 6, 2019. 3 [43] Alex Krizhevsky, Ilya Sutskever, and Geoffrey E Hinton.
+Imagenet classiﬁcation with deep convolutional neural net- works. Communications of the ACM, 60(6):84–90, 2017.
+[44] Orest Kupyn, Tetiana Martyniuk,
+Junru
+Wu,
+and Zhangyang Wang.
+Deblurgan-v2:
+Deblurring (orders- of-magnitude) faster and better.
+In Proceedings of the IEEE/CVF International Conference on Computer Vision, pages 8878–8887, 2019. 10 [45] Stamatios Lefkimmiatis. Non-local color image denoising with convolutional neural networks. In Proceedings of the
+
+IEEE Conference on Computer Vision and Pattern Recog- nition, pages 3587–3596, 2017. 2 [46] Boyi Li, Xiulian Peng, Zhangyang Wang, Jizheng Xu, and Dan Feng. An all-in-one network for dehazing and beyond.
+arXiv preprint arXiv:1707.06543, 2017. 2 [47] Siyuan Li, Wenqi Ren, Feng Wang, Iago Breno Araujo, Eric K Tokuda, Roberto Hirata Junior, Roberto M Cesar- Jr, Zhangyang Wang, and Xiaochun Cao. A comprehen- sive benchmark analysis of single image deraining: Current challenges and future perspectives. International Journal of Computer Vision, pages 1–22, 2021. 2 [48] Xia Li, Jianlong Wu, Zhouchen Lin, Hong Liu, and Hong- bin Zha. Recurrent squeeze-and-excitation context aggre- gation net for single image deraining. In Proceedings of the European Conference on Computer Vision (ECCV), pages 254–269, 2018. 8 [49] Yu Li, Robby T Tan, Xiaojie Guo, Jiangbo Lu, and Michael S Brown. Rain streak removal using layer priors.
+In Proceedings of the IEEE conference on computer vision and pattern recognition, pages 2736–2744, 2016. 8 [50] Bee Lim, Sanghyun Son, Heewon Kim, Seungjun Nah, and Kyoung Mu Lee.
+Enhanced deep residual networks for single image super-resolution. In Proceedings of the IEEE conference on computer vision and pattern recogni- tion workshops, pages 136–144, 2017. 2 [51] Bee Lim, Sanghyun Son, Heewon Kim, Seungjun Nah, and Kyoung Mu Lee.
+Enhanced deep residual networks for single image super-resolution. In Proceedings of the IEEE conference on computer vision and pattern recogni- tion workshops, pages 136–144, 2017. 6, 7 [52] Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Man- dar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke Zettlemoyer, and Veselin Stoyanov.
+Roberta:
+A ro- bustly optimized bert pretraining approach. arXiv preprint arXiv:1907.11692, 2019. 2 [53] Boyu Lu, Jun-Cheng Chen, and Rama Chellappa. Unsu- pervised domain-speciﬁc deblurring via disentangled rep- resentations. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pages 10225– 10234, 2019. 2 [54] Seungjun Nah, Tae Hyun Kim, and Kyoung Mu Lee. Deep multi-scale convolutional neural network for dynamic scene deblurring.
+In Proceedings of the IEEE conference on computer vision and pattern recognition, pages 3883–3891,
+2017. 9, 10 [55] Ben Niu, Weilei Wen, Wenqi Ren, Xiangde Zhang, Lian- ping Yang, Shuzhen Wang, Kaihao Zhang, Xiaochun Cao, and Haifeng Shen.
+Single image super-resolution via a holistic attention network.
+In European Conference on Computer Vision, pages 191–207. Springer, 2020. 7 [56] Dongwon Park, Dong Un Kang, and Se Young Chun. Blur more to deblur better: Multi-blur2deblur for efﬁcient video deblurring. arXiv preprint arXiv:2012.12507, 2020. 10 [57] Dongwon Park, Dong Un Kang, Jisoo Kim, and Se Young Chun. Multi-temporal recurrent neural networks for pro- gressive non-uniform single image deblurring with incre- mental temporal training. In European Conference on Com- puter Vision, pages 327–343. Springer, 2020. 10 [58] Kuldeep Purohit and AN Rajagopalan.
+Region-adaptive dense network for efﬁcient motion deblurring. In Proceed- ings of the AAAI Conference on Artiﬁcial Intelligence, vol- ume 34, pages 11882–11889, 2020. 10 [59] Alec Radford, Karthik Narasimhan, Tim Salimans, and Ilya Sutskever. Improving language understanding by genera- tive pre-training, 2018. 2 [60] Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, and Ilya Sutskever. Language models are unsupervised multitask learners.
+OpenAI blog, 1(8):9,
+2019. 2 [61] Colin Raffel, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena, Yanqi Zhou, Wei Li, and Peter J Liu. Exploring the limits of transfer learning with a uniﬁed text-to-text transformer. Journal of Machine Learning Research, 21(140):1–67, 2020. 2 [62] Dongwei Ren, Wangmeng Zuo, Qinghua Hu, Pengfei Zhu, and Deyu Meng. Progressive image deraining networks: A better and simpler baseline. In Proceedings of the IEEE conference on computer vision and pattern recognition, pages 3937–3946, 2019. 2, 8 [63] Karen Simonyan and Andrew Zisserman. Very deep convo- lutional networks for large-scale image recognition. arXiv preprint arXiv:1409.1556, 2014. 2 [64] Maitreya Suin, Kuldeep Purohit, and AN Rajagopalan.
+Spatially-attentive patch-hierarchical network for adaptive motion deblurring. In Proceedings of the IEEE/CVF Con- ference on Computer Vision and Pattern Recognition, pages 3606–3615, 2020. 10 [65] Ying Tai, Jian Yang, Xiaoming Liu, and Chunyan Xu.
+Memnet: A persistent memory network for image restora- tion. In Proceedings of the IEEE international conference on computer vision, pages 4539–4547, 2017. 6, 7, 8 [66] Hao Tan and Mohit Bansal.
+Lxmert: Learning cross- modality encoder representations from transformers. arXiv preprint arXiv:1908.07490, 2019. 2 [67] Xin Tao, Hongyun Gao, Xiaoyong Shen, Jue Wang, and Ji- aya Jia. Scale-recurrent network for deep image deblurring.
+In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pages 8174–8182, 2018. 2, 10 [68] Chunwei Tian, Yong Xu, Zuoyong Li, Wangmeng Zuo, Lunke Fei, and Hong Liu. Attention-guided cnn for image denoising. Neural Networks, 124:117–129, 2020. 2 [69] Fu-Jen Tsai, Yan-Tsung Peng, Yen-Yu Lin, Chung-Chi Tsai, and Chia-Wen Lin.
+Banet: Blur-aware attention networks for dynamic scene deblurring.
+arXiv preprint arXiv:2101.07518, 2021. 10 [70] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin.
+Attention is all you need.
+In Ad- vances in neural information processing systems, pages 5998–6008, 2017. 2, 4 [71] Fei Wang, Mengqing Jiang, Chen Qian, Shuo Yang, Cheng Li, Honggang Zhang, Xiaogang Wang, and Xiaoou Tang.
+Residual attention network for image classiﬁcation. In Pro- ceedings of the IEEE conference on computer vision and pattern recognition, pages 3156–3164, 2017. 2
+
+[72] Hong Wang, Qi Xie, Qian Zhao, and Deyu Meng. A model- driven deep neural network for single image rain removal.
+In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pages 3103–3112, 2020. 7, [73] Qiang Wang, Bei Li, Tong Xiao, Jingbo Zhu, Changliang Li, Derek F Wong, and Lidia S Chao.
+Learning deep transformer models for machine translation. arXiv preprint arXiv:1906.01787, 2019. 2 [74] Tianyu Wang, Xin Yang, Ke Xu, Shaozhe Chen, Qiang Zhang, and Rynson WH Lau. Spatial attentive single-image deraining with a high quality real rain dataset. In Proceed- ings of the IEEE Conference on Computer Vision and Pat- tern Recognition, pages 12270–12279, 2019. 2, 8 [75] Xiaolong Wang, Ross Girshick, Abhinav Gupta, and Kaim- ing He. Non-local neural networks. In Proceedings of the IEEE conference on computer vision and pattern recogni- tion, pages 7794–7803, 2018. 3 [76] Wei Wei, Deyu Meng, Qian Zhao, Zongben Xu, and Ying Wu. Semi-supervised transfer learning for image rain re- moval. In Proceedings of the IEEE Conference on Com- puter Vision and Pattern Recognition, pages 3877–3886,
+2019. 8 [77] Bichen Wu, Chenfeng Xu, Xiaoliang Dai, Alvin Wan, Peizhao Zhang, Masayoshi Tomizuka, Kurt Keutzer, and Peter Vajda. Visual transformers: Token-based image rep- resentation and processing for computer vision.
+arXiv preprint arXiv:2006.03677, 2020. 3 [78] Wenhan Yang, Jiaying Liu, Shuai Yang, and Zongming
+Guo.
+Scale-free single image deraining via visibility- enhanced recurrent wavelet learning. IEEE Transactions on Image Processing, 28(6):2948–2961, 2019. 2 [79] Wenhan Yang, Robby T Tan, Jiashi Feng, Zongming Guo, Shuicheng Yan, and Jiaying Liu. Joint rain detection and removal from a single image with contextualized deep net- works. IEEE transactions on pattern analysis and machine intelligence, 42(6):1377–1393, 2019. 5, 6, 8 [80] Xitong Yang, Zheng Xu, and Jiebo Luo. Towards percep- tual image dehazing by physics-based disentanglement and adversarial training. In AAAI, pages 7485–7492, 2018. 2 [81] Yuan Yuan, Wei Su, and Dandan Ma. Efﬁcient dynamic scene deblurring using spatially variant deconvolution net- work with optical ﬂow guided training. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pages 3555–3564, 2020. 10 [82] Yuhui Yuan and Jingdong Wang. Ocnet: Object context net- work for scene parsing. arXiv preprint arXiv:1809.00916,
+2018. 3 [83] Yongnian Zeng, Wei Huang, Maoguo Liu, Honghui Zhang, and Bin Zou. Fusion of satellite images in urban area: As- sessing the quality of resulting images. In 2010 18th Inter- national Conference on Geoinformatics, pages 1–4. IEEE,
+2010. 1 [84] Hongguang Zhang, Yuchao Dai, Hongdong Li, and Piotr Koniusz. Deep stacked hierarchical multi-patch network for image deblurring. In Proceedings of the IEEE/CVF Confer- ence on Computer Vision and Pattern Recognition, pages 5978–5986, 2019. 10 [85] He Zhang and Vishal M Patel. Densely connected pyramid dehazing network. In Proceedings of the IEEE conference on computer vision and pattern recognition, pages 3194– 3203, 2018. 2 [86] Kaihao Zhang, Wenhan Luo, Yiran Zhong, Lin Ma, Bjorn Stenger, Wei Liu, and Hongdong Li. Deblurring by realis- tic blurring. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pages 2737– 2746, 2020. 10 [87] Kai Zhang, Wangmeng Zuo, Yunjin Chen, Deyu Meng, and Lei Zhang. Beyond a gaussian denoiser: Residual learning of deep cnn for image denoising. IEEE Transactions on Image Processing, 26(7):3142–3155, 2017. 6, 7, 8 [88] Kai Zhang, Wangmeng Zuo, Shuhang Gu, and Lei Zhang.
+Learning deep cnn denoiser prior for image restoration. In Proceedings of the IEEE conference on computer vision and pattern recognition, pages 3929–3938, 2017. 6, 7, 8 [89] Kai Zhang, Wangmeng Zuo, and Lei Zhang.
+Ffdnet:
+Toward a fast and ﬂexible solution for cnn-based im- age denoising. IEEE Transactions on Image Processing, 27(9):4608–4622, 2018. 6, 7, 8 [90] Kai Zhang, Wangmeng Zuo, and Lei Zhang.
+Ffdnet:
+Toward a fast and ﬂexible solution for cnn-based im- age denoising. IEEE Transactions on Image Processing, 27(9):4608–4622, 2018. 6 [91] Songyang Zhang, Xuming He, and Shipeng Yan. Latent- gnn: Learning efﬁcient non-local relations for visual recog- nition. In International Conference on Machine Learning, pages 7374–7383, 2019. 3 [92] Yulun Zhang, Kunpeng Li, Kai Li, Lichen Wang, Bineng Zhong, and Yun Fu. Image super-resolution using very deep residual channel attention networks. In Proceedings of the European Conference on Computer Vision (ECCV), pages 286–301, 2018. 2, 7 [93] Yulun Zhang, Kunpeng Li, Kai Li, Bineng Zhong, and Yun Fu. Residual non-local attention networks for image restoration. arXiv preprint arXiv:1903.10082, 2019. 6, 7 [94] Yulun Zhang, Yapeng Tian, Yu Kong, Bineng Zhong, and Yun Fu.
+Residual dense network for image super- resolution. In Proceedings of the IEEE conference on com- puter vision and pattern recognition, pages 2472–2481,
+2018. 6, 7 [95] Yulun Zhang, Yapeng Tian, Yu Kong, Bineng Zhong, and Yun Fu.
+Residual dense network for image restoration.
+IEEE Transactions on Pattern Analysis and Machine Intel- ligence, 2020. 7, 8 [96] Hengshuang Zhao, Jiaya Jia, and Vladlen Koltun. Explor- ing self-attention for image recognition. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pages 10076–10085, 2020. 3 [97] Jia-Xing Zhao, Yang Cao, Deng-Ping Fan, Ming-Ming Cheng, Xuan-Yi Li, and Le Zhang. Contrast prior and ﬂuid pyramid integration for rgbd salient object detection.
+In Proceedings of the IEEE/CVF Conference on Computer Vi- sion and Pattern Recognition, pages 3927–3936, 2019. 1 [98] Jia-Xing Zhao, Jiang-Jiang Liu, Deng-Ping Fan, Yang Cao, Jufeng Yang, and Ming-Ming Cheng. Egnet: Edge guid- ance network for salient object detection. In Proceedings
+
+of the IEEE/CVF International Conference on Computer Vision, pages 8779–8788, 2019. 1 [99] Shangchen Zhou, Jiawei Zhang, Wangmeng Zuo, and Chen Change Loy. Cross-scale internal graph neural net- work for image super-resolution. Advances in Neural In- formation Processing Systems, 33, 2020. 6, 7 [100] Xizhou Zhu, Weijie Su, Lewei Lu, Bin Li, Xiaogang Wang, and Jifeng Dai. Deformable detr: Deformable trans- formers for end-to-end object detection.
+arXiv preprint arXiv:2010.04159, 2020. 3

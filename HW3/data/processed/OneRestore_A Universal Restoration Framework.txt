@@ -1,0 +1,807 @@
+OneRestore: A Universal Restoration Framework for Composite Degradation Yu Guo1,2,† , Yuan Gao1,† , Yuxu Lu3 , Huilin Zhu1,2 , Ryan Wen Liu1(B) , and Shengfeng He2(B) 1 Wuhan University of Technology, Wuhan, China wenliu@whut.edu.cn 2 Singapore Management University, Singapore shengfenghe@smu.edu.sg 3 The Hong Kong Polytechnic University, Hong Kong, China † Equal Contribution https://github.com/gy65896/OneRestore
+Abstract. In real-world scenarios, image impairments often manifest as composite degradations, presenting a complex interplay of elements such as low light, haze, rain, and snow. Despite this reality, existing restoration methods typically target isolated degradation types, thereby falling short in environments where multiple degrading factors coexist.
+To bridge this gap, our study proposes a versatile imaging model that consolidates four physical corruption paradigms to accurately represent complex, composite degradation scenarios. In this context, we propose OneRestore, a novel transformer-based framework designed for adap- tive, controllable scene restoration. The proposed framework leverages a unique cross-attention mechanism, merging degraded scene descriptors with image features, allowing for nuanced restoration. Our model allows versatile input scene descriptors, ranging from manual text embeddings to automatic extractions based on visual attributes. Our methodology is further enhanced through a composite degradation restoration loss, using extra degraded images as negative samples to fortify model constraints.
+Comparative results on synthetic and real-world datasets demonstrate OneRestore as a superior solution, significantly advancing the state-of- the-art in addressing complex, composite degradations.
+Introduction Image restoration is an essential task that entails the recovery of high-quality visuals from compromised inputs. The fidelity of these restored images is vital for the subsequent downstream tasks, such as robot navigation and autonomous driving. Considerable progress has been made in addressing single degradation scenarios by a single model (i.e., One-to-One models, see Fig. 2a), such as low- light conditions [25,80,96], haze [31,64,94], rain [16,21,47], and snow [8,12,59].
+These methods have achieved remarkable success within their intended contexts.
+Nevertheless, real-world conditions often involve unpredictable and variable com- posite degradations that can severely impact image quality and clarity [40]. The Y. Guo et al.
+Degraded Images Manual Restoration Automatic Restoration 'rain/snow' 'low+haze+rain/snow' 'haze' 'haze+rain/snow'
+'low' 'low+rain/snow' 'low+haze' 'low+haze+snow' 'low+haze+rain'
+?
+Manual Setting
+Fig. 1: Our OneRestore allows fully controllable image restoration using scene de- scriptors derived from both automatic visual attribute extraction (top) and manual text embeddings (bottom).
+occurrence of mixed degrading conditions in one image can lead to intricate inter- actions, posing significant challenges to One-to-One solutions [32,85,87,97]. The necessity for seamless switching and decision-making across specialized methods for each condition proves to be inefficient and ineffective in practical applica- tions. Therefore, there is a growing imperative for robust, all-encompassing image restoration approaches that can universally address multiple forms of degrada- tion through a singular, dynamic framework.
+Recent research has been directed toward One-to-Many models, which ad- dress various individual degradation factors within a single framework. These models are categorized into: those with partial parameter-sharing (One-to-Manyp) [5, 28, 40, 72] and those with full parameter-sharing (One-to-Manyf) [10, 38, 54, 65, 67]. One-to-Manyp (left of Fig. 2b) restoration methods typically employ models with either multiple heads and tails or a single tail to address various types of image impairments. However, the complexity and size of these models tend to scale with the diversity of degradations they aim to correct, leading to increased training costs and parameter counts. Furthermore, when images suffer from a combination of degrading factors, these models may underperform. Some One-to-Manyp techniques also depend on user intervention to select appropri- ate restoration weights, which is impractical for automated or dynamic settings.
+On the other hand, One-to-Manyf (right of Fig. 2b) approaches train models using a direct learning strategy, where inputs are images with different indi- vidual degradations and the targets are their clear counterparts. However, this direct training approach is designed predominantly for single-category degra- dation issues, it does not adequately address the complex dynamics that arise when multiple types of impairments affect an image simultaneously. As a result, such methods can falter in practical applications where user control and precise directionality of restoration are crucial. For instance, in cases where users seek to improve low-light imagery, the model might inadvertently prioritize dehazing actions, deviating from user intent.
+Drawing from the preceding discussion, we delineate the primary challenges in developing image restoration models for composite degradations in real-world conditions:
+
+OneRestore: A Universal Restoration Framework for Composite Degradation
+Bspe
+Tspe
+Bspe
+Tspe
+haze
+rain
+snow
+or
+Tall
+Hall
+Ball
+Tall Head/Backbone/Tail for Specific Task
+low
+Hspe
+Hspe
+...
+Hspe
+Hspe
+Tspe
+Tspe
+haze
+rain
+snow
+low haze rain snow
+low
+l+h
+Hall
+Ball
+Tall
+...
+or
+Embt
+Embv
+Text
+Image
+h+r
+l+h+r Scene Descriptor Head/Backbone/Tail for All Tasks
+...
+...
+...
+...
+'This is {haze+rain} Degradation'
+l+r Text/Visual Embedder
+Hspe
+Bspe
+Tspe
+Hall
+Ball
+Tall
+Embt
+Embv
+Ball (a) One-to-One (b) One-to-Many (c) One-to-Composite
+Fig. 2: Structural comparison between One-to-One, One-to-Many, and our One-to- Composite image restoration methods.
+– How can the model be designed to adaptively discern the specific degradation afflicting the input image?
+– What approaches enable a model to be trained efficiently across a spectrum of degradations while enhancing user control over the restoration process?
+– How can the recovery process be optimized that not only approach the quality of clear images but also maintain distinction from various degraded forms?
+In response to the challenges outlined, we present a unified model that builds upon established physical corruption models for degradations such as low light, haze, rain, and snow. This model effectively captures the complexity of real- world degradation conditions and forms the basis for constructing our Compos- ite Degradation Dataset (CDD-11), which serves both training and evaluation purposes. To address the issue of composite degradation, our work introduces OneRestore, a transformer-based universal restoration architecture. This novel framework distinguishes itself from conventional methods by embodying a One- to-Composite strategy, as depicted in Fig. 2c, which allows for precise and con- trollable outcomes (see Fig. 1). It employs an innovative cross-attention block that fuses scene descriptors, which can be manual text embeddings or derived au- tomatically from visual attributes. We further enhance the model’s robustness by integrating a composite degradation restoration loss, using additional degraded images as negative samples to establish stringent lower-bound constraints.
+Our key contributions are summarized as follows:
+– We present the first attempt to unify composite degradations, creating a ver- satile imaging model that simulates a range of degradation types. This inno- vation underpins the development of our comprehensive Composite Degra- dation Dataset.
+– We propose a universal framework that introduces a novel level of control- lability in image restoration, employing a cross-attention mechanism that integrates scene descriptors derived from either manual text embeddings or automated visual attribute extractions.
+– We tailor a composite degradation restoration loss, enhancing the model’s ability to discern between various forms of image degradation.
+– Our universal model not only sets a new state-of-the-art for composite dataset performance but also competes favorably with One-to-One models in single- degradation scenarios.
+Y. Guo et al.
+Related Work Complex Degradation Image Restoration. Recent advancements in image restoration have introduced a variety of solutions for complexly degraded images.
+A notable direction is the partial parameter-sharing One-to-Many approach, em- ploying architectures with multiple heads and tails, and a single backbone, to address various degradation factors. For instance, Li et al. [40] develop an all- weather network that restores scenes affected by haze, rain, and snow, using specialized encoders for each condition and a shared decoder. Chen et al. [5] in- troduce a transformer-based model for deraining, denoising, and super-resolving images, leveraging a multi-head and multi-tail design. Wang et al. [72] present a knowledge assignment strategy to differentiate and process rain and snow degra- dations adaptively. While these models represent strides in complex degrada- tion image restoration, they stop short of being truly universal One-to-Many networks. With only partial weight sharing, they address different degradation types through distinct network pathways.
+Conversely, universal image restoration has emerged with the One-to-Many methods sharing all network weights, thereby uniformly mitigating multiple degradation types. Examples include the unified two-stage knowledge learning framework by Chen et al. [10], which efficiently processes dehazing, deraining, and desnowing with a singular pretrained weight set. Li et al. [38] present a network capable of comprehensive image restoration without the need for pre- identifying degradation levels. Additionally, Özdenizci et al. [54] introduce a conditional denoising diffusion model tailored for patch-based image restoration under varied weather conditions. However, due to the significant differences and mutual interference between various degradation factors, this type of method can only solve specific types of degradation and cannot achieve image restora- tion in composite degradation scenarios. To this end, we propose a universal One-to-Composite image restoration method that allows the model to adapt to arbitrary combinations of composite degradations.
+Visual Attribute Control. Visual attributes are pivotal in defining im- age features and enhancing the interpretability of models. They enrich feature representations and provide a hierarchical framework for image analysis. Early research highlighted visual attributes’ transformative impact on image genera- tion, recognition, and retrieval [18,35,81]. More recent studies underscore their utility in improving object recognition and detection, particularly in data-scarce environments [1,51,78,98]. Visual attributes have also been leveraged for zero- shot learning applications, advancing classification tasks beyond the constraints of labeled datasets [62, 68]. In our study, we harness visual attributes to delin- eate the intricate degradation patterns present in real-world imaging conditions, enhancing the pertinence and efficacy of image restoration techniques. It is note- worthy that conventional discriminators, when tasked with identifying image degradation, are typically confined to image data, precluding autonomous fea- ture control. Our approach, by contrast, accommodates both images and text descriptions as inputs, thereby facilitating the automatic or manual determina- tion of degradation characteristics.
+
+OneRestore: A Universal Restoration Framework for Composite Degradation
+3 Composite Degradation Formulation
+3.1 Imaging Formulation In real-world scenarios, images are often affected by multiple degrading factors simultaneously, resulting in suboptimal performance from restoration methods designed for isolated degradations. To address the broad spectrum of degradation scenarios, we introduce a versatile imaging model that encapsulates all degrada- tions, including low light, haze, rain, and snow. This model aims to narrow the disparity between simulated and authentic real-world data. Given a degraded image I(x) and its corresponding clear state J(x), the proposed imaging model is mathematically articulated as \l a bel {eq:data} I(x) = \mathcal {P}_h(\mathcal {P}_{rs}(\mathcal {P}_l(J(x)))),
+(1) where Pl, Prs, and Ph denote the low light, rain/snow, and haze degradations, respectively. Given that concurrent rain and snow conditions are infrequent, they are not addressed within the scope of this work. A comprehensive exposition of the proposed imaging model is detailed below.
+Low-Light Conditions. Inspired by Retinex theory, low-light degraded im- age Il(x) can be generated by \la b el {eq:l o w} I _l(x) = \ m athcal {P}_l(J(x)) = \frac {J(x)}{L(x)}{L(x)}^\gamma + \varepsilon .
+(2) Here, we use a darkening coefficient γ ∈[2, 3] as the brightness controller to adjust the illumination map L(x) generated via LIME [26]. To simulate poor light conditions realistically, we add the Gaussian noise ε with mean = 0 and variance ∈[0.03, 0.08].
+Rain/Snow Streaks. Following the methodologies outlined in [9, 39], our process superimposes rain or snow streaks onto the image before synthesizing haze. To introduce rain streaks R, we produce the rain-degraded image Irs(x) by overlaying Prs onto the low-light image Il(x), which is expressed as \lab e l {eq:rain } I_{r s }(x) = \mathcal {P}_{rs}(I_l(x)) = I_l(x) + \mathcal {R}.
+(3) For snow streaks S, the snow-degraded image is defined as \lab e l {eq:snow } I_{rs} ( x) = \mathcal {P}_{rs}(I_l(x)) = I_l(x)(1-\mathcal {S}) + M(x)\mathcal {S},
+(4) with M(x) being the chromatic aberration map.
+Haze Degradations. We incorporate haze degradation by employing the atmospheric scattering model as \l a bel {eq:ha z e} I(x) = \ m athcal {P}_{h}(I_{rs}(x)) = I_{rs}(x)t+A(1-t),
+(5) where t denotes the transmission map and A represents the atmospheric light.
+The transmission map t is defined by the exponential decay of light, t = e−βd(x), where β represents the haze density coefficient and d(x) is the scene depth (es- timated by MegaDepth [42]). The haze density coefficient β is varied within the range of [1.0, 2.0] and the atmospheric light A is constrained to [0.6, 0.9] for realistic simulation.
+Y. Guo et al.
+(a) Overall Pipeline (c) SDTB (b) Scene Descriptor Generation
+d Cosine Cross-Entropy
+SDTB
+(256)
+SDTB
+(256)
+SDTB
+(128)
+SDTB
+(64)
+SDTB
+(32)
+Input Output l + h + r Input Image clear - c low (low light) - l haze - h rain - r snow - s Input Text
+GloVe
+MLP Text Embedding Set
+c
+l
+h
+r
+s
+l+h
+l+r
+l+s
+h+r
+h+s l+h+r l+h+s
+SDTB
+(128)
+SDTB
+(64)
+SDTB
+(32) Downsampling Skip Connection Upsampling Addition OneRestore ResNet Conv+BN+ReLU Resize Visual Embedding
+SDCA
+SA
+FFN Feature
+Map
+Scene Descriptor
+Q
+K
+V
+Qt
+K
+V
+①
+②
+or Dropout Linear
+Fig. 3: Architecture of our OneRestore. (a) Overall pipeline, where 32, 64, 128, and 256 represent the number of channels. (b) Scene descriptor generation, where scene descriptors are fed into each (c) Scene Descriptor-guided Transformer Block (SDTB) by manual text embeddings or automatic extraction based on visual attributes.
+3.2 Composite Degradation Dataset Drawing on Eq. (1), we have developed the Composite Degradation Dataset (CDD-11), encompassing 11 categories of image degradations and their clear counterparts. These degraded samples include low (low-light), haze, rain, snow, low+haze, low+rain, low+snow, haze+rain, haze+snow, low+haze+rain, and low+haze+snow. From the RAISE database [14], we selected 1,383 high-resolution clear images for producing 11 composite degradations. They are resized to a uni- form resolution of 1080×720. The overall dataset is split into 13,013 image pairs for training and 2,200 for testing.
+OneRestore
+4.1 Overall Pipeline The encoder-decoder network, validated as an effective architectural paradigm for image restoration [11, 17, 27], serves as the overall structure for our model, as depicted in Fig. 3a. Building upon the encoder-decoder structure, we devise an innovative Scene Descriptor-guided Transformer Block (SDTB) as the ba- sic unit for feature extraction (Fig. 3c). Our approach diverges from existing transformer-based methods [8,11,64] by concurrently integrating image features and scene descriptors into the SDTB basic block for supporting fine-grained im- age restoration. In particular, the generation of scene descriptors ranges from manual text embeddings to automatic extraction based on visual attributes, as illustrated in Fig. 3b. Further details on scene descriptor generation and SDTB are elaborated in Sections 4.2 and 4.3. For capturing multi-scale representations, the encoder employs three downsampling operations, mirrored by the decoder’s upsampling operations. To be specific, we utilize "Max-Pooling + Conv" and "Bilinear Interpolation + Conv" for downsampling and upsampling, respectively.
+
+OneRestore: A Universal Restoration Framework for Composite Degradation Simultaneously, three skip connections and a global residual enhance model con- vergence by bridging shallow and deep features. Additional details regarding the configuration of our OneRestore can be found in supplementary materials.
+Ultimately, the overall loss L for model training is defined as follows
+\lab el { eq: l oss} \m ath c al {L} = \ al pha _1 \mathcal {L}^s_{1}(J,\hat {J})+ \alpha _2 \mathcal {L}_\text {M}(J,\hat {J})+ \alpha _3\mathcal {L}_\text {c}(J,\hat {J},I,\{I_o\}),
+(6) where Ls 1, LM, and Lc represent the smooth l1 loss [22], Multi-Scale Structural Similarity (MS-SSIM) loss, and the proposed composite degradation restoration loss (see Sec. 4.4), respectively, α1-3 denote the penalty coefficients, J, ˆJ, I, and {Io} are the positive, model output anchor, model input negative, and other negatives, respectively.
+4.2 Scene Descriptor Generation To augment the controllability of our OneRestore, we introduce the scene de- scription embedding as an additional input to the model, alongside the degraded image. As delineated in Fig. 3b, the generation of the scene descriptor offers two selectable modes: the manual mode ①and the automatic mode ②. In the manual mode, user involvement is necessitated to supply scene description text, gener- ating the corresponding text embedding employed as an input. Conversely, the automatic mode involves the extraction of visual attributes from the image to generate visual embedding, estimating the most proximate text embedding. To quantify the difference between visual and text embeddings and train optimal text and visual embedders, we introduce cosine cross-entropy loss for model weight optimization.
+Text Embedder. For the text embedding generation task, we employ a set of 5 scene description texts as input to generate 12 text embeddings. Initially, GloVe [55] is leveraged to generate initial text embeddings for 1 clear scene and 4 scenes with single degradation types. Subsequently, 7 additional composite degradation text embeddings (i.e., low+haze, low+rain, low+snow, haze+rain, haze+snow, low+haze+rain, and low+haze+snow) are generated by averaging the element values in the corresponding text embeddings. A Multi-Layer Per- ception (MLP) is then employed to refine the 12 text embeddings.
+Visual Embedder. Taking inspiration from the work of Saini et al. [62], we first resize the input image to 224×224 and extract image features using a ResNet-18 [30] network without average pooling. The initial weights of ResNet- 18 are pre-trained on the ImageNet dataset. Subsequently, a single convolutional layer, followed by a dropout layer and a linear layer, is introduced to generate the final visual embedding. By calculating the cosine similarity between visual em- beddings and all text embeddings, and selecting the one with the highest similar- ity, we can automatically generate scene descriptors to achieve image restoration based on visual attribute control.
+Cosine Cross-Entropy. Similar to [62], the score of visual embedding and each text embedding is obtained by “Cosine Similarity + Softmax”. Given ev Y. Guo et al.
+and et being the visual and text embeddings, the similarity score S(ev, et) can be given by \begi n { s p l it } &
+c os(e _v, e _t) = \d e lta \cdot \
+fra c {e_v \cdot e^\ top _t}{\left \| e_v\right \|\left \| e_t\right \| }, \label {cos} \\ &S(e_v, e_t) = \frac {e^{cos(e_v, e_t)}}{ {\textstyle \sum _{t_i=1}^{N_t}}e^{cos(e_v,e_{t_i})}}, \\ \end {split}
+(7) with δ and Nt being the temperature factor and the number of text embeddings, respectively. Based on the calculated S(ev, et), we use the cross-entropy loss for model training.
+4.3 Scene Descriptor-guided Transformer Block To further harness the capabilities of scene description embeddings in image restoration tasks and facilitate a more adaptive and nuanced restoration pro- cess, we introduce the innovative Scene Descriptor-guided Transformer Block (SDTB), illustrated in Fig. 3c. The SDTB consists of three primary components, namely Scene Descriptor-guided Cross-Attention (SDCA), Self-Attention (SA), and Feed-Forward Network (FFN). Diverging from traditional self-attention mechanisms, the proposed SDCA module utilizes a query generated from scene descriptors instead of queries generated from image features. The mathematical representation of our SDCA can be written as \label { eq : ca} \text { SD
+C A}(\mathbf {Q}_t, \mathbf {K}, \mathbf {V}) = \text {Softmax}(\frac {\mathbf {Q}_t \cdot \mathbf {K}^\top }{\lambda })\mathbf {V},
+(8) where λ is a temperature factor, Qt represents the scene descriptor-generated query matrix, K and V denote the image feature-generated key and value ma- trices, respectively. Qt is obtained from the input scene description embedding et via a linear layer. During the process of matrix multiplication between Qt and K. To ensure consistency in the number of tokens between K and Qt, we resize the original image before performing the reshaping operation to generate K. By incorporating the SDCA module, each transformer block in OneRestore can effectively integrate scene descriptors and image features for targeted image restoration. As for the SA and FFN modules, we adopt structures akin to those in Restormer [85]. More details of our SDTB are introduced in the supplement.
+4.4 Composite Degradation Restoration Loss Using contrastive loss has been demonstrated as an effective way of improving image restoration performance [76, 94]. Essentially, contrastive loss views the degraded input image as a negative sample, the clear image as a positive sam- ple, and the restored image as an anchor. This loss function works to minimize the distance between the anchor and the positive sample while maximizing its distance from the negative sample. In the composite degradation image restora- tion task, the traditional contrastive loss, however, may inadvertently reduce the
+
+OneRestore: A Universal Restoration Framework for Composite Degradation Input Images Encoder Latent Space
+Push
+Pull Input Degradation Negative Other Degradation Negatives Anchor Positive Encoding Feature
+Fig. 4: Illustration of the composite degradation restoration loss.
+distance between the anchor and other degraded images. To make the anchor closer to the positive sample while maintaining a clear separation from all de- graded negatives, we design a composite degradation restoration loss, illustrated in Fig. 4. Considering I, Io, J, and ˆJ as the input negative, other negatives, positive, and anchor, the proposed loss can be written as \la bel { eq:co n
+t
+r
+} \
+ma thcal {L} _\t ext {c}(J,\h at { J},I,\ { I_ o\} ) = \sum _{k =1} ^{K} \xi _k\frac {\mathcal {L}_1(V_k(J),V_k(\hat {J}))}{\xi _c\mathcal {L}_1(V_k(\hat {J}),V_k(I)) + \sum _{o=1}^{O}\xi _o\mathcal {L}_1(V_k(I_o),V_k(\hat {J}))},
+(9) where Vk(·) denotes the extraction operation of k-th hidden feature from the VGG-16 pre-trained on the ImageNet, L1 represents the l1 loss, K and O are the numbers of used VGG-16 feature layers and other degraded negatives, ξk, ξc, and ξo denote the hyper-parameters, respectively. In this work, the number of other degraded negatives O is 10. We use the output features of 3-rd, 8-th, and 15-th layers from VGG-16 and set K = 3. Furthermore, we consider that the features of each feature layer of each degraded negative have equal importance. Therefore, we set ξc = ξo = 11 and ξk = 1
+3. According to our ablation study, the proposed loss confers a significant advantage over using a single input degradation as a negative sample, which can easily capture positive sample features.
+Table 1: Settings of model training. “lr” denotes the learning rate.
+Terms Text/Visual Embedder OneRestore
+Epoch
+120 Initial lr 0.0001 0.0002 lr Decay 0.5/50 epochs 0.5/20 epochs Batch Size
+4 Experiments
+5.1 Experiment Settings Implementation Details. Our OneRestore is implemented by PyTorch 1.12.0 and trained on a PC with 2 AMD EPYC 7543 32-Core Processors and 8 NVIDIA L40 GPUs. We use the Adam with exponential decay rates being β1 = 0.9 and β2 = 0.999 for optimization. The training parameter settings for text/visual embedder and OneRestore are shown in Table 1. In particular, all images used for training are cropped into 256×256 image patches with a sampling stride of 200 Y. Guo et al.
+Table 2: Comparison of quantitative results on CDD-11 dataset. OneRestore† means using the corresponding scene description text as additional input, and WGWSNet requires the scene type as model input. Red, green, and blue indicate the best, second- best, and third-best results, respectively.
+Types Methods Venue & Year PSNR ↑SSIM ↑#Params
+Input
+16.00 0.6008
+- One-to-One MIRNet [86] ECCV2020
+25.97 0.8474 31.79M MPRNet [87] CVPR2021
+25.47 0.8555 15.74M MIRNetv2 [88] TPAMI2022
+25.37 0.8335
+5.86M Restormer [85] CVPR2022
+26.99 0.8646 26.13M DGUNet [53] CVPR2022
+26.92 0.8559 17.33M NAFNet [7] ECCV2022
+24.13 0.7964 17.11M SRUDC [63] ICCV2023
+27.64 0.8600
+6.80M Fourmer [95] ICML2023
+23.44 0.7885
+0.55M OKNet [13] AAAI2024
+26.33 0.8605
+4.72M One-to-Many AirNet [38] CVPR2022
+23.75 0.8140
+8.93M TransWeather [65] CVPR2022
+23.13 0.7810 21.90M WeatherDiff [54] TPAMI2023
+22.49 0.7985 82.96M PromptIR [56] NIPS2023
+25.90 0.8499 38.45M WGWSNet [99] CVPR2023
+26.96 0.8626 25.76M One-to-Composite OneRestore
+28.47 0.8784
+5.98M OneRestore†
+28.72 0.8821
+5.98M and randomly flipped by 0, 90, 180, and 270 degrees to generate 312k patch pairs.
+More details about training and inference can be found in the supplement.
+Evaluation Datasets. To facilitate a thorough comparison, we execute im- age restoration experiments across various datasets. These include the Compos- ite Degradation Dataset (CDD-11) crafted by us, established One-to-One bench- marks, and authentic real-world datasets. The standard One-to-One benchmarks are designated for four principal tasks: the LOw-Light dataset (LOL) [74], the REalistic Single Image DEhazing Outdoor Training Set (RESIDE-OTS) [37], the Rain1200 dataset [90], and the Snow100k dataset [46]. Owing to the dearth of specialized datasets for real-world composite degradation, we have curated a selection from the LIME low-light enhancement dataset [26], the RESIDE Real- world Task-driven Testing Set (RESIDE-RTTS) [37], Yang’s rainy dataset [82], and the realistically snowy Snow100k dataset [37].
+Competitors and Evaluation Metrics. We compare our OneRestore with 9 One-to-One image restoration methods (MIRNet [86], MPRNet [87], MIR- Netv2 [88], Restormer [85], DGUNet [53], NAFNet [7], SRUDC [63], Fourmer [95], and OKNet [13]) and 5 One-to-Many image restoration methods (AirNet [38], TransWeather [65], WeatherDiff [54], PromptIR [56], and WGWSNet [99]). In particular, all compared state-of-the-art methods are retrained on our CDD-11 train set. For PromptIR and WGWSNet, we adjust the number of prompts and the weather-specific parameters of each layer for corresponding to our task, re- spectively. Furthermore, we adopt the Peak Signal-to-Noise Ratio (PSNR) and Structure Similarity Index Measure (SSIM) as evaluation metrics.
+
+OneRestore: A Universal Restoration Framework for Composite Degradation
+5.2 Comparison with SOTAs
+l+h
+s
+r
+h
+l
+l+r
+l+s
+h+r
+h+s
+l+h+r
+l+h+s
+l+h
+s
+r
+h
+l
+l+r
+l+s
+h+r
+h+s
+l+h+r
+l+h+s
+PSNR
+SSIM AirNet TransWeather WeatherDiff PromptIR WGWSNet OneRestore
+Fig. 5:
+Comparison of quantitative re- sults for different degradation scenarios on CDD-11 dataset.
+The quantitative evaluation results on our CDD-11 test dataset are displayed in Table 2. OneRestore† with text em- bedder achieves the highest perfor- mance, followed by OneRestore with visual embedder as the second-best.
+Both OneRestore† and OneRestore demonstrate substantial leads over the third-ranked methods in terms of both PSNR and SSIM. Further detailed restoration performance comparison of our method and the One-to-Many methods in each degradation scenario is illustrated in Fig. 5 using radar charts. Notably, image restoration for composite degradation scenarios proves challenging. By incorporating scene description embeddings into image restora- tion models and utilizing the proposed composite degradation restoration loss, our method robustly reconstructs clear images across various situations. For compelling evidence, Fig. 6 provides the visual comparison of image restoration in two composite degradation samples. It is evident that SRUDC, OKNet, Air- Net, and WGWSNet are unable to suppress all degenerative interferences, while Restormer and PromptIR are prone to color distortion and noise residual. In contrast, the proposed OneRestore can produce more natural results and fully preserve image textures and details.
+Moreover, Fig. 7 displays the image restoration results in two real-world sce- narios. Compared with existing One-to-Many image restoration methods [38,54, 56], the proposed OneRestore can simultaneously focus on multiple degradation factors and robustly reconstruct scene details. More results on CDD-11, real- world scenarios, and other One-to-One benchmarks of low-light, hazy, rainy, and snowy scenes are included in supplementary materials.
+5.3 Ablation Study Effectiveness of Network Modules. Table 3 reports the quantitative evalua- tion of different module configurations. While the Feed-Forward Network (FFN) with convolution as the basic unit serves as a crucial module in the transformer network, it alone fails to generate satisfactory reconstruction results. The ordi- nary Self-Attention module (SA) significantly strengthens network performance, but this method regrets that the model fails to be flexibly controlled. Compared to depending only on SA, relying exclusively on Scene Description-guided Cross- Attention (SDCA) utilizing scene description embedding yields better outcomes.
+This further confirms that addressing complex composite degradations can be done more effectively and flexibly by integrating degradation scene descriptors Y. Guo et al.
+Input Images Restormer
+SRUDC
+OKNet AirNet PromptIR WGWSNet OneRestore Ground Truth 16.31/0.5363 22.69/0.8223 24.37/0.8155 21.91/0.8101 19.08/0.7485 24.92/0.8070 23.49/0.8189 25.00/0.8370 PSNR/SSIM 15.00/0.4982 24.79/0.8315 23.14/0.8206 23.17/0.8240 22.95/0.7741 24.29/0.8077 22.16/0.8300 26.39/0.8553 PSNR/SSIM
+Fig. 6: Comparison of image restoration on low+haze+rain (top) and low+haze+snow (bottom) synthetic samples.
+Input Images AirNet AirNet* WeatherDiff WeatherDiff* OneRestore PromptIR* PromptIR
+Fig. 7: Comparison of image restoration on low+haze+rain (top) and low+haze+snow (bottom) samples in real-world scenarios. * represents the utilization of original weights published in the author’s code.
+into the model. Ultimately, the best performance can be achieved by using a combination of SDCA, SA, and FFN.
+Input Image Noise Image Classifier Visual Embedder Visual Embedder & Text Embedder Ground Truth
+‡
+Fig. 8: Comparison of image restoration on different embedding strategies.
+Selection of Description Em- bedding Strategies. In this section, we compare the image restoration per- formance by using different strategies to generate scene descriptor, includ- ing Classifier (utilizing the embedding before the last linear layer of the re- trained AlexNet [33] as the scene de- scriptor), Visual Embedder (employ- ing visual embedding for model train- ing), Visual Embedder‡ (deriving text embedding via visual embedder), and Text Embedder (employing text embedding for model training). The quantita- tive evaluation results are presented in Table 4. It is observed that employing Classifier and Visual Embedder to generate scene descriptors yields comparable outcomes. However, these approaches have a drawback in that each image has a distinct embedding as input, making it challenging for the model to recognize the cause of degradation. Fig. 8 displays a classic case comparison using different embedding strategies, where the abnormal artifacts of the results produced by Classifier and Visual Embedder are caused by the model’s fuzzy identification of degradation factors. Moreover, the restoration model lacks controllability. The discrepancy between Visual Embedder‡ and Text Embedder stems from errors
+
+OneRestore: A Universal Restoration Framework for Composite Degradation
+Table 3: Ablation study for different model configurations. SDCA, SA, and FFN denote the scene description-guided cross-attention, self-attention, and feed-forward network, respectively.
+SDCA
+SA
+FFN PSNR ↑ SSIM ↑ Controllability
+✓
+24.81 0.8607
+✓
+✓
+27.19 0.8697
+✓
+✓
+27.93 0.8767
+✓
+✓
+✓
+✓
+28.72 0.8821
+✓ Ground Truth Input Image
+‘low’ ‘haze’ ‘rain’ ‘low+haze’ ‘low+rain’ ‘haze+rain’ ‘low+haze+rain’ Ground Truth Input Image
+‘low’ ‘haze’ ‘snow’ ‘low+haze’ ‘low+snow’ ‘haze+snow’ ‘low+haze+snow’
+Fig. 9: Comparison of image restoration on low+haze+rain (top) and low+haze+snow (bottom) synthetic samples by using different texts.
+in scene descriptor estimation. Visual Embedder‡ has an accuracy of 97.55% on the test dataset, with misestimation occurring when some degradation types are insignificant. For instance, a haze+snow scene may be evaluated as a haze or snow scene. In contrast, the text embedding-based approach is superior in describing degradation scenes and recovering images, using a fixed number of scene descriptors. This allows the model to employ degraded scene descriptors as switches to achieve controlled restoration.
+clear
+low
+haze
+rain
+snow low+haze low+rain low+snow haze+rain haze+snow low+haze+rain low+haze+snow
+Train
+Test
+Fig. 10: Visualization of visual embed- dings based on t-SNE.
+Effectiveness
+of
+Loss
+Func- tions. Table 5 presents a performance comparison of different loss functions.
+Notably, the integration of the MS- SSIM loss is instrumental in elevat- ing SSIM scores at the cost of reduced PSNR performance. In contrast, the CL loss demonstrates minimal impact, providing only marginal improvements in SSIM and PSNR. Upon replacing CL with CDRL, a substantial enhance- ment is observed in both PSNR and SSIM. The proposed CDRL loss yields an output that closely resembles the clear image while avoiding other forms of degradation.
+5.4 Model Control via Scene Descriptor To demonstrate the controllability of the scene descriptor in our OneRestore, we conduct experiments on two intricate synthetic degradation scenarios, as de- picted in Fig. 9. By manually adjusting specific text to generate corresponding degraded scene description embeddings, our model can selectively focus on dif- ferent degradation factors, achieving targeted restorations. Our approach excels Y. Guo et al.
+Table 4: Ablation study for description embedding strategies.
+Models PSNR ↑ SSIM ↑ Controllability Classifier
+28.19 0.8783 Visual Embedder
+28.24 0.8781 Visual Embedder‡
+28.47 0.8784 Text Embedder
+28.72 0.8821
+✓
+Table 5: Ablation study for different loss functions. CL and CDRL denote the ordinary contrastive loss and the proposed composite degradation restoration loss, respectively.
+Smooth l1 MS-SSIM
+CL
+CDRL PSNR ↑ SSIM ↑
+✓
+28.16 0.8633
+✓
+✓
+27.54 0.8708
+✓
+✓
+✓
+27.61 0.8723
+✓
+✓
+✓
+28.72 0.8821 in controllable restoration without the need for multiple sets of weight screening, making it more concise compared to other One-to-Many methods that rely on partial parameter sharing. Meanwhile, our method can support adaptive restora- tion through the estimation of text embeddings based on visual attribute extrac- tion. Fig. 10 employs the t-SNE [50] to visualize the embeddings generated by the visual embedder on the CDD-11 train and test sets. Obviously, the constructed visual embedder can clearly distinguish between different scenarios. Addition- ally, more real cases of the model control using different scene description texts are presented in supplementary materials.
+Conclusion Our proposed OneRestore framework represents a significant step forward in image restoration, synthesizing a range of degradation patterns to accurately simulate complex scenarios. The innovative use of a scene descriptor-guided cross-attention block within a transformer-based model facilitates an adaptable and fine-grained restoration process, yielding results that surpass prior methods in both synthetic and real-world datasets. However, despite its advancements, OneRestore exhibits limitations in processing extremely high-density corruption scenarios and high-complex corruption scenarios containing unconsidered degra- dations, where the model’s predictive capabilities can be challenged. Future work will aim to enhance the robustness of OneRestore against such extreme condi- tions and to reduce computational overhead, further extending its applicability and efficiency. Our findings underscore the potential of universal scene restora- tion, with the caveat that continued refinement is essential for tackling the full spectrum of real-world image degradation.
+Acknowledgement. This project is supported by the Guangdong Natural Science Funds for Distinguished Young Scholar under Grant 2023B1515020097 and National Research Foundation Singapore under the AI Singapore Programme under Grant AISG3-GV-2023-011.
+
+OneRestore: A Universal Restoration Framework for Composite Degradation
+References
+1. Bertasius, G., Torresani, L.: Cobe: Contextualized object embeddings from nar- rated instructional video. In: NeurIPS. pp. 15133–15145 (2020) 4
+2. Cai, B., Xu, X., Jia, K., Qing, C., Tao, D.: Dehazenet: An end-to-end system for single image haze removal. IEEE TIP 25(11), 5187–5198 (2016) 28
+3. Cai, Y., Bian, H., Lin, J., Wang, H., Timofte, R., Zhang, Y.: Retinexformer: One- stage retinex-based transformer for low-light image enhancement. In: ICCV. pp.
+12504–12513 (2023) 28
+4. Chen, D., He, M., Fan, Q., Liao, J., Zhang, L., Hou, D., Yuan, L., Hua, G.: Gated context aggregation network for image dehazing and deraining. In: WACV. pp.
+1375–1383 (2019) 28
+5. Chen, H., Wang, Y., Guo, T., Xu, C., Deng, Y., Liu, Z., Ma, S., Xu, C., Xu, C., Gao, W.: Pre-trained image processing transformer. In: CVPR. pp. 12299–12310 (2021) 2, 4
+6. Chen, L.C., Papandreou, G., Kokkinos, I., Murphy, K., Yuille, A.L.: Deeplab: Se- mantic image segmentation with deep convolutional nets, atrous convolution, and fully connected crfs. IEEE TPAMI 40(4), 834–848 (2017) 28
+7. Chen, L., Chu, X., Zhang, X., Sun, J.: Simple baselines for image restoration. In:
+ECCV. pp. 17–33 (2022) 10
+8. Chen, S., Ye, T., Liu, Y., Liao, T., Jiang, J., Chen, E., Chen, P.: Msp-former:
+Multi-scale projection transformer for single image desnowing. In: ICASSP. pp. 1– 5 (2023) 1, 6
+9. Chen, W.T., Fang, H.Y., Hsieh, C.L., Tsai, C.C., Chen, I., Ding, J.J., Kuo, S.Y., et al.: All snow removed: Single image desnowing algorithm using hierarchical dual- tree complex wavelet representation and contradict channel loss. In: CVPR. pp.
+4196–4205 (2021) 5
+10. Chen, W.T., Huang, Z.K., Tsai, C.C., Yang, H.H., Ding, J.J., Kuo, S.Y.: Learning multiple adverse weather removal via two-stage knowledge learning and multi- contrastive regularization: Toward a unified model. In: CVPR. pp. 17653–17662 (2022) 2, 4, 28, 29
+11. Chen, X., Li, H., Li, M., Pan, J.: Learning a sparse transformer network for effective image deraining. In: CVPR. pp. 5896–5905 (2023) 6, 28
+12. Chen, Z., Sun, Y., Bi, X., Yue, J.: Lightweight image de-snowing: A better trade-off between network capacity and performance. Neural Networks 165, 896–908 (2023)
+13. Cui, Y., Ren, W., Knoll, A.: Omni-kernel network for image restoration. In: AAAI.
+vol. 38, pp. 1426–1434 (2024) 10
+14. Dang-Nguyen, D.T., Pasquini, C., Conotter, V., Boato, G.: Raise: A raw images dataset for digital image forensics. In: MMSys. pp. 219–224 (2015) 6
+15. Dong, H., Pan, J., Xiang, L., Hu, Z., Zhang, X., Wang, F., Yang, M.H.: Multi-scale boosted dehazing network with dense feature fusion. In: CVPR. pp. 2157–2167 (2020) 28, 29
+16. Du, Y., Deng, J., Zheng, Y., Dong, J., He, S.: Dsdnet: Toward single image derain- ing with self-paced curricular dual stimulations. CVIU 230, 103657 (2023) 1
+17. Du, Y., Han, G., Tan, Y., Xiao, C., He, S.: Blind image denoising via dynamic dual learning. IEEE TMM 23, 2139–2152 (2020) 6
+18. Ferrari, V., Zisserman, A.: Learning visual attributes. In: NeurIPS. pp. 433–440 (2007) 4 Y. Guo et al.
+19. Fu, X., Huang, J., Ding, X., Liao, Y., Paisley, J.: Clearing the skies: A deep network architecture for single-image rain removal. IEEE TIP 26(6), 2944–2956 (2017) 28
+20. Fu, X., Qi, Q., Zha, Z.J., Zhu, Y., Ding, X.: Rain streak removal via dual graph convolutional network. In: AAAI. vol. 35, pp. 1352–1360 (2021) 28, 29
+21. Fu, X., Xiao, J., Zhu, Y., Liu, A., Wu, F., Zha, Z.J.: Continual image deraining with hypergraph convolutional networks. IEEE TPAMI 45(8), 9534–9551 (2023)
+22. Girshick, R.: Fast r-cnn. In: ICCV. pp. 1440–1448 (2015) 7
+23. Guo, C.L., Yan, Q., Anwar, S., Cong, R., Ren, W., Li, C.: Image dehazing trans- former with transmission-aware 3d position embedding. In: CVPR. pp. 5812–5820 (2022) 28, 29
+24. Guo, C., Li, C., Guo, J., Loy, C.C., Hou, J., Kwong, S., Cong, R.: Zero-reference deep curve estimation for low-light image enhancement. In: CVPR. pp. 1780–1789 (2020) 28
+25. Guo, X., Hu, Q.: Low-light image enhancement via breaking down the darkness.
+IJCV 131(1), 48–66 (2023) 1
+26. Guo, X., Li, Y., Ling, H.: Lime: Low-light image enhancement via illumination map estimation. IEEE TIP 26(2), 982–993 (2016) 5, 10
+27. Guo, Y., Gao, Y., Liu, W., Lu, Y., Qu, J., He, S., Ren, W.: Scanet: Self-paced semi- curricular attention network for non-homogeneous image dehazing. In: CVPRW.
+pp. 1884–1893 (2023) 6
+28. Han, J., Li, W., Fang, P., Sun, C., Hong, J., Armin, M.A., Petersson, L., Li, H.:
+Blind image decomposition. In: ECCV. pp. 218–237 (2022) 2
+29. He, K., Sun, J., Tang, X.: Single image haze removal using dark channel prior.
+IEEE TPAMI 33(12), 2341–2353 (2010) 28
+30. He, K., Zhang, X., Ren, S., Sun, J.: Deep residual learning for image recognition.
+In: CVPR. pp. 770–778 (2016) 7
+31. Hoang, T., Zhang, H., Yazdani, A., Monga, V.: Transer: Hybrid model and ensemble-based sequential learning for non-homogenous dehazing. In: CVPR. pp.
+1670–1679 (2023) 1
+32. Jiao, J., Tu, W.C., Liu, D., He, S., Lau, R.W.H., Huang, T.S.: Formnet: Formatted learning for image restoration. IEEE TIP 29, 6302–6314 (2020) 2
+33. Krizhevsky, A., Sutskever, I., Hinton, G.E.: Imagenet classification with deep con- volutional neural networks. CACM 60(6), 84–90 (2017) 12
+34. Kulkarni, A., Phutke, S.S., Murala, S.: Unified transformer network for multi- weather image restoration. In: ECCV. pp. 344–360 (2022) 29
+35. Kumar, N., Berg, A., Belhumeur, P.N., Nayar, S.: Describable visual attributes for face verification and image search. IEEE TPAMI 33(10), 1962–1977 (2011) 4
+36. Li, B., Peng, X., Wang, Z., Xu, J., Feng, D.: Aod-net: All-in-one dehazing network.
+In: ICCV. pp. 4770–4778 (2017) 28
+37. Li, B., Ren, W., Fu, D., Tao, D., Feng, D., Zeng, W., Wang, Z.: Benchmarking single-image dehazing and beyond. IEEE TIP 28(1), 492–505 (2018) 10, 23, 24, 28, 29
+38. Li, B., Liu, X., Hu, P., Wu, Z., Lv, J., Peng, X.: All-in-one image restoration for unknown corruption. In: CVPR. pp. 17452–17462 (2022) 2, 4, 10, 11
+39. Li, R., Cheong, L.F., Tan, R.T.: Heavy rain image restoration: Integrating physics model and conditional adversarial learning. In: CVPR. pp. 1633–1642 (2019) 5
+40. Li, R., Tan, R.T., Cheong, L.F.: All in one bad weather removal using architectural search. In: CVPR. pp. 3175–3185 (2020) 1, 2, 4, 28
+41. Li, X., Wu, J., Lin, Z., Liu, H., Zha, H.: Recurrent squeeze-and-excitation context aggregation net for single image deraining. In: ECCV. pp. 254–269 (2018) 28
+
+OneRestore: A Universal Restoration Framework for Composite Degradation
+42. Li, Z., Snavely, N.: Megadepth: Learning single-view depth prediction from internet photos. In: CVPR. pp. 2041–2050 (2018) 5
+43. Liang, Y., Anwar, S., Liu, Y.: Drt: A lightweight single image deraining recursive transformer. In: Proc. IEEE CVPR. pp. 589–598 (2022) 29
+44. Liu, R., Ma, L., Zhang, J., Fan, X., Luo, Z.: Retinex-inspired unrolling with coop- erative prior architecture search for low-light image enhancement. In: CVPR. pp.
+10561–10570 (2021) 28, 29
+45. Liu, X., Ma, Y., Shi, Z., Chen, J.: Griddehazenet: Attention-based multi-scale network for image dehazing. In: ICCV. pp. 7314–7323 (2019) 28
+46. Liu, Y.F., Jaw, D.W., Huang, S.C., Hwang, J.N.: Desnownet: Context-aware deep network for snow removal. IEEE TIP 27(6), 3064–3073 (2018) 10, 23, 25, 28, 29
+47. Luo, Y., Huang, Q., Ling, J., Lin, K., Zhou, T.: Local and global knowledge dis- tillation with direction-enhanced contrastive learning for single-image deraining.
+Knowledge-Based Syst. 268, 110480 (2023) 1
+48. Lv, F., Lu, F., Wu, J., Lim, C.: Mbllen: Low-light image/video enhancement using cnns. In: BMVC. vol. 220, p. 4 (2018) 28
+49. Ma, L., Ma, T., Liu, R., Fan, X., Luo, Z.: Toward fast, flexible, and robust low-light image enhancement. In: CVPR. pp. 5637–5646 (2022) 29
+50. Van der Maaten, L., Hinton, G.: Visualizing data using t-sne. JMLR 9(11), 2579– 2605 (2008) 14
+51. Meng, Q., Shin’ichi, S.: Adinet: Attribute driven incremental network for retinal image classification. In: CVPR. pp. 4033–4042 (2020) 4
+52. Mittal, A., Soundararajan, R., Bovik, A.C.: Making a “completely blind” image quality analyzer. IEEE SPL 20(3), 209–212 (2012) 28
+53. Mou, C., Wang, Q., Zhang, J.: Deep generalized unfolding networks for image restoration. In: CVPR. pp. 17399–17410 (2022) 10
+54. Özdenizci, O., Legenstein, R.: Restoring vision in adverse weather conditions with patch-based denoising diffusion models. IEEE TPAMI 45(8), 10346–10357 (2023) 2, 4, 10, 11, 28
+55. Pennington, J., Socher, R., Manning, C.D.: Glove: Global vectors for word repre- sentation. In: EMNLP. pp. 1532–1543 (2014) 7, 21
+56. Potlapalli, V., Zamir, S.W., Khan, S.H., Shahbaz Khan, F.: PromptIR: Prompting for all-in-one image restoration. NeurIPS 36 (2024) 10, 11
+57. Qin, X., Wang, Z., Bai, Y., Xie, X., Jia, H.: Ffa-net: Feature fusion attention network for single image dehazing. In: AAAI. vol. 34, pp. 11908–11915 (2020) 28
+58. Qiu, Y., Zhang, K., Wang, C., Luo, W., Li, H., Jin, Z.: Mb-taylorformer: Multi- branch efficient transformer expanded by taylor formula for image dehazing. In:
+ICCV. pp. 12802–12813 (2023) 28
+59. Quan, Y., Tan, X., Huang, Y., Xu, Y., Ji, H.: Image desnowing via deep invertible separation. IEEE TCSVT 33(7), 3133–3144 (2023) 1
+60. Ren, D., Zuo, W., Hu, Q., Zhu, P., Meng, D.: Progressive image deraining networks:
+A better and simpler baseline. In: CVPR. pp. 3937–3946 (2019) 28
+61. Ren, W., Liu, S., Zhang, H., Pan, J., Cao, X., Yang, M.H.: Single image dehazing via multi-scale convolutional neural networks. In: ECCV. pp. 154–169 (2016) 28
+62. Saini, N., Pham, K., Shrivastava, A.: Disentangling visual embeddings for at- tributes and objects. In: CVPR. pp. 13658–13667 (2022) 4, 7
+63. Song, B., Chen, X., Xu, S., Zhou, J.: Under-display camera image restoration with scattering effect. In: ICCV. pp. 12580–12589 (2023) 10
+64. Song, Y., He, Z., Qian, H., Du, X.: Vision transformers for single image dehazing.
+IEEE TIP 32, 1927–1941 (2023) 1, 6 Y. Guo et al.
+65. Valanarasu, J.M.J., Yasarla, R., Patel, V.M.: Transweather: Transformer-based restoration of images degraded by adverse weather conditions. In: CVPR. pp. 2353– 2363 (2022) 2, 10, 28
+66. Venkatanath, N., Praneeth, D., Bh, M.C., Channappayya, S.S., Medasani, S.S.:
+Blind image quality evaluation using perception based features. In: NCC. pp. 1–6 (2015) 28
+67. Wang, C., Zheng, Z., Quan, R., Sun, Y., Yang, Y.: Context-aware pretraining for efficient blind image decomposition. In: CVPR. pp. 18186–18195 (2023) 2
+68. Wang, Q., Liu, L., Jing, C., Chen, H., Liang, G., Wang, P., Shen, C.: Learning conditional attributes for compositional zero-shot learning. In: CVPR. pp. 11197– 11206 (2023) 4
+69. Wang, Q., Jiang, K., Wang, Z., Ren, W., Zhang, J., Lin, C.W.: Multi-scale fusion and decomposition network for single image deraining. IEEE TIP 33, 191–204 (2023) 29
+70. Wang, S., Zheng, J., Hu, H.M., Li, B.: Naturalness preserved enhancement algo- rithm for non-uniform illumination images. IEEE TIP 22(9), 3538–3548 (2013) 28,
+71. Wang, T., Yang, X., Xu, K., Chen, S., Zhang, Q., Lau, R.W.: Spatial attentive single-image deraining with a high quality real rain dataset. In: CVPR. pp. 12270– 12279 (2019) 28
+72. Wang, Y., Ma, C., Liu, J.: Smartassign: Learning a smart knowledge assignment strategy for deraining and desnowing. In: CVPR. pp. 3677–3686 (2023) 2, 4
+73. Wang, Y., Wan, R., Yang, W., Li, H., Chau, L.P., Kot, A.: Low-light image en- hancement with normalizing flow. In: AAAI. vol. 36, pp. 2604–2612 (2022) 28
+74. Wei, C., Wang, W., Yang, W., Liu, J.: Deep retinex decomposition for low-light enhancement. In: BMVC. pp. 1–12 (2018) 10, 23, 24, 28
+75. Wei, W., Meng, D., Zhao, Q., Xu, Z., Wu, Y.: Semi-supervised transfer learning for image rain removal. In: CVPR. pp. 3877–3886 (2019) 28
+76. Wu, H., Qu, Y., Lin, S., Zhou, J., Qiao, R., Zhang, Z., Xie, Y., Ma, L.: Contrastive learning for compact single image dehazing. In: CVPR. pp. 10551–10560 (2021) 8
+77. Xiao, J., Fu, X., Liu, A., Wu, F., Zha, Z.J.: Image de-raining transformer. IEEE TPAMI 45(11), 12978–12995 (2022) 28
+78. Xu, W., Xian, Y., Wang, J., Schiele, B., Akata, Z.: Attribute prototype network for zero-shot learning. In: NeurIPS. pp. 21969–21980 (2020) 4
+79. Xu, X., Wang, R., Fu, C.W., Jia, J.: Snr-aware low-light image enhancement. In:
+CVPR. pp. 17714–17724 (2022) 28, 29
+80. Xu, X., Wang, R., Lu, J.: Low-light image enhancement via structure modeling and guidance. In: CVPR. pp. 9893–9903 (2023) 1
+81. Yan, X., Yang, J., Sohn, K., Lee, H.: Attribute2image: Conditional image genera- tion from visual attributes. In: ECCV. pp. 776–791 (2016) 4
+82. Yang, W., Tan, R.T., Feng, J., Liu, J., Guo, Z., Yan, S.: Deep joint rain detection and removal from a single image. In: CVPR. pp. 1357–1366 (2017) 10, 28, 29
+83. Yasarla, R., Patel, V.M.: Uncertainty guided multi-scale residual learning-using a cycle spinning cnn for single image de-raining. In: CVPR. pp. 8405–8414 (2019) 28
+84. Yi, Q., Li, J., Dai, Q., Fang, F., Zhang, G., Zeng, T.: Structure-preserving deraining with residue channel prior guidance. In: ICCV. pp. 4238–4247 (2021) 28
+85. Zamir, S.W., Arora, A., Khan, S., Hayat, M., Khan, F.S., Yang, M.H.: Restormer:
+Efficient transformer for high-resolution image restoration. In: CVPR. pp. 5728– 5739 (2022) 2, 8, 10, 20
+
+OneRestore: A Universal Restoration Framework for Composite Degradation
+86. Zamir, S.W., Arora, A., Khan, S., Hayat, M., Khan, F.S., Yang, M.H., Shao, L.:
+Learning enriched features for real image restoration and enhancement. In: ECCV.
+pp. 492–511 (2020) 10, 28
+87. Zamir, S.W., Arora, A., Khan, S., Hayat, M., Khan, F.S., Yang, M.H., Shao, L.:
+Multi-stage progressive image restoration. In: CVPR. pp. 14821–14831 (2021) 2, 10, 28, 29
+88. Zamir, S.W., Arora, A., Khan, S., Hayat, M., Khan, F.S., Yang, M.H., Shao, L.: Learning enriched features for fast image restoration and enhancement. IEEE TPAMI 45(2), 1934–1948 (2022) 10
+89. Zhang, F., Li, Y., You, S., Fu, Y.: Learning temporal consistency for low light video enhancement from single images. In: CVPR. pp. 4967–4976 (2021) 28
+90. Zhang, H., Patel, V.M.: Density-aware single image de-raining using a multi-stream dense network. In: CVPR. pp. 695–704 (2018) 10, 23, 25, 28
+91. Zhang, K., Li, R., Yu, Y., Luo, W., Li, C.: Deep dense multi-scale network for snow removal using semantic and depth priors. IEEE TIP 30, 7419–7431 (2021) 28
+92. Zhang, Y., Guo, X., Ma, J., Liu, W., Zhang, J.: Beyond brightening low-light images. IJCV 129, 1013–1037 (2021) 28
+93. Zhang, Y., Zhang, J., Guo, X.: Kindling the darkness: A practical low-light image enhancer. In: ACM MM. pp. 1632–1640 (2019) 28
+94. Zheng, Y., Zhan, J., He, S., Dong, J., Du, Y.: Curricular contrastive regularization for physics-aware single image dehazing. In: CVPR. pp. 5785–5794 (2023) 1, 8, 28,
+95. Zhou, M., Huang, J., Guo, C.L., Li, C.: Fourmer: An efficient global modeling paradigm for image restoration. In: ICML. pp. 42589–42601 (2023) 10
+96. Zhou, M., Wu, X., Wei, X., Xiang, T., Fang, B., Kwong, S.: Low-light enhancement method based on a retinex model for structure preservation. IEEE TMM pp. 1–13 (2023) 1
+97. Zhou, Y., Xu, Y., Du, Y., Wen, Q., He, S.: Pro-pulse: Learning progressive encoders of latent semantics in gans for photo upsampling. IEEE TIP 31, 1230–1242 (2022)
+98. Zhu, Y., Min, W., Jiang, S.: Attribute-guided feature learning for few-shot image recognition. IEEE TMM 23, 1200–1209 (2020) 4
+99. Zhu, Y., Wang, T., Fu, X., Yang, X., Guo, X., Dai, J., Qiao, Y., Hu, X.: Learning weather-general and weather-specific features for image restoration under multiple adverse weather conditions. In: CVPR. pp. 21747–21758 (2023) 10, 28 Y. Guo et al.
+A Overview This supplementary material provides more details on model configuration and experimental results, which can be listed as follows:
+– We offer additional configuration details about the Text/Visual Embedder and the OneRestore model.
+– We elaborate on model training and inference procedures.
+– We present more experimental results to verify the effectiveness and control- lability of the proposed method.
+– We discuss limitations and outline future research directions.
+(a) Scene Descriptor-guided Cross-Attention (b) Self-Attention (c) Feed-Forward Network
+Image Feature
+Scene Descriptor
+K
+Qt
+V Layer Norm
+Conv
+1×1
+Conv
+1×1 DW-Conv
+3×3 DW-Conv
+3×3 Linear Reshape Resize Reshape Repeat Softmax Reshape
+Conv
+1×1
+K
+V Layer Norm
+Conv
+1×1
+Conv
+1×1 DW-Conv
+3×3 DW-Conv
+3×3 Reshape Reshape Softmax Reshape
+Conv
+1×1
+Conv
+1×1 DW-Conv
+3×3 Reshape
+Q Layer Norm
+Conv
+1×1
+Conv
+1×1 DW-Conv
+3×3 DW-Conv
+3×3
+GELU
+Conv
+1×1 h1×w1×c h1w1×c
+c×324
+324×c
+c×c h1×w1×c h1w1×c c×h1w1 h1w1×c
+c×c h1×w1×c h1×w1×c h1×w1×c h1×w1×c Element-wise Addition Element-wise Multiplication Matrix Multiplication
+Fig. 11: Architecture of proposed Scene Descriptor-guided Transformer Block (SDTB).
+B Network Details
+B.1 Transformer Block
+Fig. 11 displays the details of the Scene Descriptor-guided Transformer Block (SDTB), which includes three parts: Scene Descriptor-guided Cross-Attention (SDCA), Self-Attention (SA), and Feed-Forward Network (FFN). Specifically, the SDCA considers the image feature and degraded scene descriptor as input.
+The values V and keys K are generated by processing image features using two modules with the same structure but different weights, concatenating 1 × 1 Convolution (Conv) with 3 × 3 DepthWise Convolution (DW-Conv). As for the scene descriptor, we use a linear layer to produce the scene description query Qt. Then, we adjust the image size to make the number of tokens in K to be consistent with Qt. The SA and FFN adopt modules proposed by Restormer [85].
+By incorporating SDCA, our model can facilitate restored orientation control by changing different embeddings.
+B.2 Detailed Architecture All network configurations and output sizes of each layer are displayed in Table 6.
+Specifically, the MLP layer used in the text embedder consists of a linear operator and a ReLU activation function. The visual embedder introduces a dropout layer to prevent overfitting. Our OneRestore employs three max-pooling operations to downsample images and utilizes the Scene Descriptor-guided Transformer Block (SDTB) to extract multi-scale image features. Finally, bilinear interpolation up- sampling and skip connections are employed to fuse features of different scales and levels.
+
+OneRestore: A Universal Restoration Framework for Composite Degradation
+Table 6: Configurations of network architecture. n, c, and head denote the numbers of texts, channels, and attention heads, respectively. l is the length of the initial text embedding. k and s represent the kernel size and stride, respectively. bn and relu denote the batch normalization and ReLU activation function, respectively.
+Models Layers Configurations Output Size Text Embedder Input1 Scene Description Text 1 string GloVe [55] n = 12, l = 300
+MLP1 c = 324, relu Visual Embedder Input2 RGB Image h × w × 3 Resize Uniform Size 224 × 224 × 3 ResNet ResNet-18 7 × 7 × 512
+Conv1 c = 1024, k = 1, bn, relu 7 × 7 × 1024 Dropout rate = 0.35 7 × 7 × 1024 AvgPool Global 1 × 1 × 1024 Linear1 c = 324 OneRestore Input3 RGB Image h × w × 3 Input4 Scene Descriptor
+Conv2 c = 32, k = 1 h × w × 32
+SDTB1 c = 32, head = 8 h × w × 32
+Down1 Maxpool k = 3, s = 2, Conv c = 64, k = 1
+h
+2 × w 2 × 64
+SDTB2 c = 64, head = 8
+h
+2 × w 2 × 64
+Down2 Maxpool k = 3, s = 2, Conv c = 128, k = 1
+h
+4 × w 4 × 128
+SDTB3 c = 128, head = 8
+h
+4 × w 4 × 128
+Down3 Maxpool k = 3, s = 2, Conv c = 256, k = 1
+h
+8 × w 8 × 256
+SDTB4 c = 256, head = 8
+h
+8 × w 8 × 256
+SDTB5 c = 256, head = 8
+h
+8 × w 8 × 256
+SDTB6 c = 256, head = 8
+h
+8 × w 8 × 256 Addition1 Down3 + SDTB6
+h
+8 × w 8 × 256
+SDTB7 c = 256, head = 8
+h
+8 × w 8 × 256
+Up1 Bilinear Interpolation, Conv c = 128, k = 1
+h
+4 × w 4 × 128 Addition2 Up1 + SDTB3
+h
+4 × w 4 × 128
+SDTB8 c = 128, head = 8
+h
+4 × w 4 × 128
+Up2 Bilinear Interpolation, Conv c = 64, k = 1
+h
+2 × w 2 × 64 Addition3 Up2 + SDTB2
+h
+2 × w 2 × 64
+SDTB9 c = 64, head = 8
+h
+2 × w 2 × 64
+Up3 Bilinear Interpolation, Conv c = 32, k = 1 h × w × 32 Addition4 Up3 + SDTB1 h × w × 32 SDTB10 c = 32, head = 8 h × w × 32
+Conv3 c = 3, k = 1 h × w × 3 Addition5 Conv3 + Input3 h × w × 3
+C Model Training and Inference The model training includes two steps: text/visual embedder training and OneRe- store model training. Meanwhile, the model inference involves a manual mode based on text embedding and an automatic mode controlled by visual attributes.
+C.1 Step1: Text/Visual Embedder Training.
+The pseudo-code is shown in Alg. 1. Initially, we set RGB image and scene de- scription text label pairs as (Iv, y) and all texts as St, respectively. Subsequently, the text embedder Embt is employed to generate 12 scene description embed- dings et (line 2 in Alg. 1), and the visual embedder Embv is utilized to produce visual embeddings ev from Iv (line 3 in Alg. 1). Finally, we calculate the cosine similarity between visual embeddings and text embeddings and perform gradient descent via the cross-entropy loss (line 4 in Alg. 1).
+Y. Guo et al.
+Algorithm 1 Text/Visual Embedder Training Input: Visual image and scene description text label pairs (Iv, y), all texts St.
+1: repeat
+2:
+et = Embt(St) \triangleright Get text embeddings.
+3:
+ev = Embv(Iv) \triangleright Get visual embeddings.
+4:
+Perform the gradient descent step by Lcross = −1
+Nv
+PNv
+i=1
+PNt j=1 yij log (S(evi, etj)).
+\triangleright Nv and Nt are the numbers of visual and text embeddings, respectively. yi is the truth label of i-th sample. When the truth label is j, yij = 1, otherwise yij = 0.
+5: until converged 6: return Embt, Embv Algorithm 2 OneRestore Model Training Input: Clear, input degraded, and other degraded image pairs (J, I, {Io}), scene de- scription text of input degraded image S′ t ∈St, text embedder Embt.
+1: repeat
+2:
+e′ t = Embt(S′
+t) \triangleright Get the scene descriptor with the frozen text embedder.
+3:
+ˆJ = OneRestore(I, e′
+t) \triangleright Get the restored image.
+4:
+Perform the gradient descent step by L = α1Ls 1(J, ˆJ) + α2LM(J, ˆJ) + α3Lc(J, ˆJ, I, {Io}).
+5: until converged 6: return OneRestore
+C.2 Step2: OneRestore Model Training.
+The pseudo-code is shown in Alg. 2. We consider the clear, input degraded, and other degraded image pairs (J, I, {Io}), scene description text of the input degraded image S′ t ∈St, and pre-trained text embedder Embt as inputs. Embt is first used to generate scene descriptors e′ t (line 2 in Alg. 2). Input degraded images I and scene descriptors e′ t are jointly fed into our OneRestore to generate restored results (line 3 in Alg. 2). For the model converges, the total loss L is employed for gradient descent (line 3 in Alg. 2).
+C.3 Model Inference.
+As shown in Alg. 3, our model inference has two modes: manual and automatic.
+The necessary input is the degraded image I, and the optional input is the scene description text S′ t ∈St. When the manual mode is selected, scene descriptors e′
+t will be generated directly from S′ t using Embt (line 2 in Alg. 3). When using the automatic mode, Embv will first generate visual embedding e′ v (line 4 in Alg.
+3). Then, the distance between the visual embedding e′ v and all text embeddings et is calculated by cosine similarity, and the top-1 text embedding is selected as the OneRestore input (line 5-6 in Alg. 3). The restored result will be generated by processing I and e′ t through our OneRestore model (line 8 in Alg. 3).
+
+OneRestore: A Universal Restoration Framework for Composite Degradation Algorithm 3 Model Inference Input: Input degraded image I, scene description text of input degraded image S′
+t ∈St (non-essential).
+1: if exist S′ t then \triangleright Manual restoration.
+2:
+e′ t = Embt(S′
+t) 3: else \triangleright Automatic restoration.
+4:
+e′ v = Embv(I)
+5:
+Calculate the cosine similarity between e′ v and each text embedding by cos(e′ v, et) = γ ·
+e′
+v·e⊤
+t ∥e′v∥∥et∥.
+6:
+Select the text embedding with the highest similarity as the estimated scene descriptor e′
+t.
+7: end if 8: ˆJ = OneRestore(I, e′
+t) 9: return ˆJ
+D Experiments Results In this section, we conduct a comparative analysis of our OneRestore against state-of-the-art (SOTA) models on benchmark datasets of related tasks, aiming to validate OneRestore’s generalization ability. Subsequently, extensive experi- ments of image restoration, encompassing both synthetic and real-world scenar- ios, are presented to further illustrate the method’s efficacy. Lastly, an analysis focusing on the model controllability is performed.
+D.1 Comparison on Classic Benchmarks We train and test our OneRestore on classic benchmark datasets for low-light en- hancement (LOL [74]), dehazing (RESIDE-OTS [37]), draining (Rain1200 [90]), and desnowing (Snow100k [46]), and conduct a comprehensive comparison of our method with SOTA methods in each task. The quantitative results and visual performance of each method are reported in Table 7 and Figs. 12-15, respectively.
+Given that our OneRestore is designed to address composite degradations, it is inevitable that it cannot surpass the current optimal SOTA methods for all benchmarks. Nonetheless, the comparable performance of the recovery results unequivocally demonstrates the model’s robust feature extraction capabilities.
+It is noteworthy that our method boasts a relatively smaller number of parame- ters (only 5.98M) and faster inference speed (0.0115s for processing a 1080×720 image on our PC), further reinforcing its practical significance.
+D.2 More Results on CDD-11 Dataset We conduct experiments on the proposed Composite Degradation Dataset (CDD- 11), where an example of a clear image and its corresponding 11 types of de- graded samples are shown in Fig. 16. Quantitative comparisons of all methods on Y. Guo et al.
+Ground Truth Input Images RetinexNet MBLLEN
+KinD MIRNet DeepUPE KinD++ DeepLPF Zero-DCE
+RUAS StableLLVE LLFlow
+SCI SNRNet Retinexformer OneRestore
+Fig. 12: Comparison of low-light enhancement on LOL dataset [74].
+Ground Truth Input Image DehazeNet
+MSCNN AODNet
+GDN GCANet Dehamer FFANet
+MSBDN C2PNet MBTformer OneRestore
+DCP
+Fig. 13: Comparison of image dehazing on RESIDE dataset [37].
+our CDD-11 dataset are shown in Fig. 17, demonstrating that our OneRestore can achieve a balance between quantitative results and parameter quantities.
+Furthermore, Fig. 18 displays more restoration cases on the 11 types of de- graded images from the CDD-11 dataset. It is clear that current SOTA methods are limited in their ability to handle all types of image degradation and can produce unstable results. In contrast, our method is designed to be versatile and can effectively handle a wide range of degradation scenarios. By incorporat- ing scene descriptors to identify degradation situations, our method can create high-quality images with rich details.
+D.3 More Results on Real-World Dataset To assess the robustness of our model, which was trained using the CDD-11 dataset, against complex degradation scenarios, we conducted extensive real-
+
+OneRestore: A Universal Restoration Framework for Composite Degradation Ground Truth Input Image RESCAN DerainNet DIDMDN
+SEMI
+UMRL PreNet MPRNet DualGCN SPDNet
+IDT DRSformer OneRestore
+Fig. 14: Comparison of image dehazing on Rain1200 dataset [90].
+Ground Truth Input Images DDMSNet
+TUM WGWSNet OneRestore WeatherDiff
+Fig. 15: Comparison of image desnowing on Snow100k-L dataset [46].
+clear low + haze + rain low + haze + snow haze + snow haze + rain low + snow low + rain
+snow low + haze
+rain
+haze
+low
+Fig. 16: Visualization of one test sample on CDD-11 dataset.
+6 10
+40
+90
+24
+28
+6 10
+40
+90
+0.76
+0.78
+0.80
+0.82
+0.84
+0.86
+0.88
+0.90 OneRestore† OneRestore
+SRUDC DGUNet WGWSNet Restormer MIRNet PromptIR TransWeather WeatherDiff MPRNet NAFNet Fourmer AirNet MIRNetv2
+OKNet OneRestore OneRestore† MPRNet
+PSNR
+SSIM TransWeather WeatherDiff PromptIR MIRNet NAFNet AirNet Fourmer MPRNet MIRNetv2
+OKNet DGUNet WGWSNet Restormer
+SRUDC OneRestore OneRestore† WeatherDiff TransWeather NAFNet Fourmer AirNet DGUNet MIRNet PromptIR MIRNetv2
+OKNet
+SRUDC WGWSNet Restormer
+Fig. 17: Comparison of quantitative results and parameter quantities on CDD-11 dataset. OneRestore† indicates the manual mode, while OneRestore denotes the auto- matic mode.
+Y. Guo et al.
+AirNet TransWeather WeatherDiff PromptIR OneRestore Input Images WGWSNet Ground Truth
+Fig. 18: Comparison of image restoration on low, haze, rain, snow, low+haze, low+rain, low+snow, haze+rain, haze+snow, low+haze+rain, and low+haze+snow synthetic sam-
+ples.
+
+OneRestore: A Universal Restoration Framework for Composite Degradation AirNet TransWeather WeatherDiff PromptIR OneRestore Input Images WGWSNet
+
+Fig. 19: Comparison of image restoration on low, haze, rain, snow, low+haze, low+rain, low+snow, haze+rain, haze+snow, low+haze+rain, and low+haze+snow samples in real-world scenarios.
+Y. Guo et al.
+Table 7: Comparison of quantitative results on four benchmarks. Red, green, and blue indicate the best, second-best, and third-best results, respectively.
+Methods Venue & Year PSNR ↑ SSIM ↑ Methods Venue & Year PSNR ↑ SSIM ↑
+Input
+7.77 0.1914
+Input
+15.92 0.8139 RetinexNet [74] BMVC2018
+17.12 0.5920 DCP [29] TPAMI2010
+14.67 0.7825 MBLLEN [48] BMVC2018
+17.86 0.7247 DehazeNet [2] TIP2016
+20.95 0.8841 KinD [93] ACMMM2019
+17.71 0.7734 MSCNN [61] ECCV2016
+20.00 0.8779 MIRNet [86] ECCV2020
+24.10 0.8421 AODNet [36] ICCV2017
+20.36 0.8945 Zero-DCE [24] CVPR2020
+14.86 0.5624 GCANet [4] WACV2019
+22.60 0.8985 KinD++ [92] IJCV2021
+17.75 0.7581 GDN [45] ICCV2019
+30.77 0.9808 RUAS [44] CVPR2021
+16.40 0.5034 FFANet [57] AAAI2020
+32.13 0.9792 StableLLVE [89] CVPR2021
+17.36 0.7373 MSBDN [15] CVPR2020
+30.23 0.9458 LLFlow [73] AAAI2022
+19.34 0.8388 DeHamer [23] CVPR2022
+30.70 0.9457 SNRNet [79] CVPR2022
+24.61 0.8401 C2PNet [94] CVPR2023
+34.05 0.9857 Retinexformer [3] ICCV2023
+25.15 0.8434 MB-TFormer [58] ICCV2023
+37.94 0.9899 OneRestore
+24.25 0.8564 OneRestore
+35.58 0.9814 (a) Enhancement results on the LOL dataset [74].
+(b) Dehazing results on the RESIDE-OTS dataset [37].
+Methods Venue & Year PSNR ↑ SSIM ↑ Methods Venue & Year PSNR ↑ SSIM ↑
+Input
+22.16 0.6869
+Input
+18.68 0.6470 RESCAN [41] ECCV2016
+28.83 0.8430 DerainNet [19] TIP2017
+19.18 0.7495 DerainNet [19] TIP2017
+21.93 0.7814 DehazeNet [2] TIP2016
+22.62 0.7975 DID-MDN [90] CVPR2018
+27.99 0.8627 DeepLab [6] TPAMI2017
+21.29 0.7747 UMRL [83] CVPR2019
+28.62 0.8706 RESCAN [41] ECCV2018
+26.08 0.8108 SEMI [75] CVPR2019
+24.39 0.7622 SPANet [71] CVPR2019
+23.70 0.7930 PreNet [60] CVPR2019
+29.79 0.8811 AIO [40] CVPR2020
+28.33 0.8820 MPRNet [87] CVPR2021
+31.32 0.8907 DDMSNet [91] TIP2021
+28.85 0.8772 DualGCN [20] AAAI2021
+32.09 0.9181 TransWeather [65] CVPR2022
+29.31 0.8879 SPDNet [84] ICCV2021
+32.84 0.9138 TUM [10] CVPR2022
+26.90 0.8321 IDT [77] TPAMI2022
+33.13 0.9238 WGWSNet [99] CVPR2023
+28.94 0.8758 DRSformer [11] CVPR2023
+33.59 0.9274 WeatherDiff [54] TPAMI2023
+30.09 0.9041 OneRestore
+32.89 0.9182 OneRestore
+30.24 0.8947 (c) Deraining results on the Rain1200 dataset [90].
+(d) Desnowing results on the Snow100k dataset [46].
+world image restoration experiments. Our quantitative analysis on four distinct real-world benchmarks utilized two no-reference quality assessment metrics: the Natural Image Quality Evaluator (NIQE) [52] and the Perception-based Image Quality Evaluator (PIQE) [66]. It was noted that these benchmarks were specifi- cally chosen to represent the four degradation challenges we aimed to address: the Naturalness Preserved Enhancement dataset (NPE) [70] for low-light enhance- ment, the RESIDE Real-world Task-driven Testing Set (RTTS) [37] for image dehazing, Yang’s dataset (RS) [82] for image deraining, and the real Snow100k dataset (Snow100k-R) [46] for image desnowing. As shown in Table 8, our quanti- tative assessment comparison with SOTA methods substantiates the exceptional performance of our model in restoring these degradation datasets. Moreover, we show additional real-world image restoration cases in Fig. 19. It is evident that models trained on the CDD-11 dataset exhibit remarkable efficacy in real-world scenarios, thereby validating the proposed synthesis strategy as an effective sim- ulation tool for real composite degradation scenarios. Notably, both WGWSNet and our method, which introduces degraded descriptions, demonstrate supe- rior visual effects. Our OneRestore establishes a more stringent lower-bound constraint by applying the composite degradation restoration loss, enabling its restoration results to closely approximate clear scenarios.
+D.4 More Results of Different Scene Descriptors To verify the controllability of our model, we conduct a comparison experiment on seven distinct types of images employing varying text embeddings. The result-
+
+OneRestore: A Universal Restoration Framework for Composite Degradation
+Table 8: Comparison of quantitative results on four real benchmarks. The best results are in bold, and the second-best are with underline.
+Methods Venue & Year NIQE ↓ PIQE ↓ Methods Venue & Year NIQE ↓ PIQE ↓ RUAS [44] IJCV2021
+7.77
+19.64 MSBDN [15] CVPR2020
+4.77
+26.14 SCI [49] CVPR2021
+3.97
+16.35 DeHamer [23] CVPR2022
+5.34
+31.93 SNRNet [79] CVPR2022
+4.49
+20.71 C2PNet [94] CVPR2023
+5.03
+25.09 OneRestore
+3.93
+16.69 OneRestore
+4.58
+23.91 (a) Enahncement results on the NPE dataset [70].
+(b) Dehazing results on the RTTS dataset [37].
+Methods Venue & Year NIQE ↓ PIQE ↓ Methods Venue & Year NIQE ↓ PIQE ↓ MPRNet [87] CVPR2021
+3.55
+20.78 DRT [43] CVPRW2022
+3.93
+12.00 DualGCN [20] AAAI2021
+3.27
+15.15 TUM [10] CVPR2022
+3.13
+9.14 MFDNet [69] TIP2023
+3.37
+18.86 UMWT [34] ECCVW2022
+3.34
+12.29 OneRestore
+3.32
+14.46 OneRestore
+3.00
+9.12 (c) Deraining results on the RS dataset [82].
+(d) Desnowing results on the Snow100k-R dataset [46].
+‘low+haze’ ‘haze’
+‘low’ Input Image ‘low+rain’ ‘rain’
+‘low’ Input Image ‘low+snow’ ‘snow’
+‘low’ Input Image ‘haze+rain’ ‘rain’ ‘haze’ Input Image ‘haze+snow’ ‘snow’ ‘haze’ Input Image Input Image
+‘low’ ‘haze’ ‘snow’ ‘low+haze’ ‘low+snow’ ‘haze+snow’ ‘low+haze+snow’ ‘low+haze’ ‘low+rain’ ‘haze+rain’ ‘low+haze+rain’ Input Image
+‘low’ ‘haze’ ‘rain’ (a) Double degeneration coexistence examples (b) Triple degenerate coexistence examples
+Fig. 20: Comparison of image restoration on real-world scenarios by using different text descriptors.
+ing visual outcomes are shown in Fig. 20. By introducing scene description texts, we can direct the model’s attention to different types of degradation factors, thereby achieving controllable restoration. Furthermore, the input of multiple words in conjunction enables our OneRestore to achieve better visual perfor- mance in complex composite degradation scenarios. Fig. 21 further illustrates the impact of using different scene description texts on the feature maps output by SDTB10 and restoration results under low+haze+rain and low+haze+snow synthetic samples. The introduction of scene description texts can serve as prior information, enabling the model to establish the distinct representation space for correspondence degradation. This characteristic positions our OneRestore as a superior solution in addressing complex, composite degradations.
+E Limitation and Future Work Extensive experiments have been conducted to verify the proposed method’s performance on both synthetic and real composite degradation scenarios. Im- Y. Guo et al.
+Input Image
+‘low’ ‘haze’ ‘snow’ ‘low+haze’ ‘low+snow’ ‘haze+snow’ ‘low+haze+snow’ ‘low+haze’ ‘low+rain’ ‘haze+rain’ ‘low+haze+rain’ Input Image
+‘low’ ‘haze’ ‘rain’
+Fig. 21: Comparison of the SDTB10 output feature maps and restoration results based on different texts on low+haze+rain and low+haze+snow synthetic samples. Due to the intricate interplay of different degradation factors, our model tends to slightly eliminate features not explicitly mentioned in the description text. As indicated in the red oval regions, this phenomenon is often observed in the context of rain and snow degradation. Nevertheless, our model already exhibits impressive controllability.
+OneRestore Input Images
+Fig. 22: Failure cases of image restoration.
+pressive results have demonstrated that the proposed unified imaging model ef- fectively simulates real-world complex degradation. Moreover, the introduction of degraded scene descriptors and the proposed composite degradation restora- tion loss can aid the model in adjusting to complex situations. However, our approach still has failure recovery cases, as illustrated in Fig. 22. Although some degradation factors are well suppressed or eliminated, color abnormalities and distortions still exist in the restoration results. Based on the observation of fail- ure results, we elaborate on the limitations and future research directions of this work in more detail, which can be introduced as follows:
+– Disparities between synthetic and real-world data may constrain the image restoration ability of our approach in some real degradation scenarios, such as high-density corruption scenarios.
+– More degradation types are not considered in this work, such as raindrops, moiré, shadows, etc. However, the proposed universal framework provides a solid solution, making it possible to cover a wider range of degradation types by incorporating additional scene descriptors for directional restoration.
+
+OneRestore: A Universal Restoration Framework for Composite Degradation – While the proposed approach provides restoration control over the degra- dation type, achieving restoration intensity control for each type remains a direction for future research.
+– Ensuring model robustness while reducing computational overhead is also one of our future considerations.

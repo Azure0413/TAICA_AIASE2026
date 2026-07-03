@@ -1,0 +1,28 @@
+{
+  "_comment": "複製到 ~/.pi/agent/models.json，把 baseUrl / id 改成你的設定。Pi 的 pi-ai 層支援任何 OpenAI-compatible endpoint。本檔示範三種常見後端：LM Studio (本機), Ollama (本機 / LAN 自架), llama-server。",
+  "providers": {
+    "ollama-remote": {
+      "_comment": "LAN 內自架 Ollama（非雲端付費 API；OK 用於本作業）。把 IP 改成你那台的內網 IP。",
+      "baseUrl": "http://192.168.63.184:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [
+        { "id": "qwen2.5:7b", "input": ["text"] },
+        { "id": "gpt-oss:20b", "input": ["text"] },
+        { "id": "gemma4:latest", "input": ["text"] }
+      ]
+    },
+    "ollama-local": {
+      "baseUrl": "http://localhost:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [ { "id": "qwen2.5:7b", "input": ["text"] } ]
+    },
+    "lmstudio": {
+      "baseUrl": "http://localhost:1234/v1",
+      "api": "openai-completions",
+      "apiKey": "lm-studio",
+      "models": [ { "id": "google/gemma-4-26b-a4b", "input": ["text"] } ]
+    }
+  }
+}

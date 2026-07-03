@@ -1,0 +1,14 @@
+{
+  "task_id": "semver_002",
+  "description": "client module: rename the public parameter `port` to `address` and remove the public helper ping() — both break existing callers.",
+  "old_code": "class Client:\n    def __init__(self, host, port):\n        self.host = host\n        self.port = port\n    def send(self, data):\n        return len(data)\n\ndef ping(host):\n    return True\n",
+  "new_code": "class Client:\n    def __init__(self, host, address):\n        self.host = host\n        self.address = address\n    def send(self, data):\n        return len(data)\n",
+  "expected_bump": "major",
+  "perturbations": [
+    {
+      "expected_bump": "major",
+      "old_code": "def parse(text, strict=False):\n    return text\n",
+      "new_code": "def parse(text, mode):\n    return text\n"
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+# open-semver-advisor skill — pure Python standard library only (ast / json / re / argparse).
+# No third-party dependencies; nothing to pin. Kept so the grader's
+# `pip install -r scripts/requirements.txt` step is a deterministic no-op (spec §1.6).

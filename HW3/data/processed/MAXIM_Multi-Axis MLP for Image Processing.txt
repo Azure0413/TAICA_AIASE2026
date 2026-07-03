@@ -1,0 +1,960 @@
+MAXIM: Multi-Axis MLP for Image Processing Zhengzhong Tu1,2* Hossein Talebi1 Han Zhang1 Feng Yang1 Peyman Milanfar1 Alan Bovik2 Yinxiao Li1 1 Google Research 2 University of Texas at Austin
+Abstract Recent progress on Transformers and multi-layer per- ceptron (MLP) models provide new network architectural designs for computer vision tasks. Although these models proved to be effective in many vision tasks such as image recognition, there remain challenges in adapting them for low-level vision. The inﬂexibility to support high-resolution images and limitations of local attention are perhaps the main bottlenecks. In this work, we present a multi-axis MLP based architecture called MAXIM, that can serve as an ef- ﬁcient and ﬂexible general-purpose vision backbone for im- age processing tasks. MAXIM uses a UNet-shaped hierar- chical structure and supports long-range interactions en- abled by spatially-gated MLPs. Speciﬁcally, MAXIM con- tains two MLP-based building blocks: a multi-axis gated MLP that allows for efﬁcient and scalable spatial mixing of local and global visual cues, and a cross-gating block, an alternative to cross-attention, which accounts for cross- feature conditioning. Both these modules are exclusively based on MLPs, but also beneﬁt from being both global and ‘fully-convolutional’, two properties that are desirable for image processing. Our extensive experimental results show that the proposed MAXIM model achieves state-of- the-art performance on more than ten benchmarks across a range of image processing tasks, including denoising, de- blurring, deraining, dehazing, and enhancement while re- quiring fewer or comparable numbers of parameters and FLOPs than competitive models.
+The source code and trained models will be available at https://github.
+com/google-research/maxim.
+1. Introduction Image processing tasks, such as restoration and enhance- ment, are important computer vision problems, which aim to produce a desired output from a degraded input. Vari- ous types of degradations may require different image en- hancement treatments, such as denoising, deblurring, super- *Work done during an internship at Google.
+MPRNet
+MAXIM
+39.71
+39.96 Denoising
+HINet
+MAXIM
+32.71
+32.86 Deblurring
+HINet
+MAXIM
+37.20
+38.06 Deraining
+AECR
+MAXIM
+37.17
+38.11 Dehazing
+UEGAN
+MAXIM
+25.00
+26.15 Enhancement
+Figure 1. Our proposed MAXIM model signiﬁcantly advances state-of-the-art performance on ﬁve image processing tasks in terms of PSNR: 1) Denoising (+0.24 dB on SIDD [2]), 2) De- blurring (+0.15 dB on GoPro [62]) 3) Deraining (+0.86 dB on Rain100L [105]), 4) Dehazing (+0.94 dB on RESIDE [46]), and 5) Retouching (Enhancement) (+1.15 dB on FiveK [8]).
+resolution, dehazing, low-light enhancement, and so on.
+Given the increased availability of curated large-scale train- ing datasets, recent high-performing approaches [15, 17, 20, 22, 50, 52, 60, 61, 110, 111, 125] based on highly de- signed convolutional neural network (CNN) have demon- strated state-of-the-art (SOTA) performance on many tasks.
+Improving the architectural design of the underlying model is one of the keys to improving the performance of most computer vision tasks, including image restora- tion. Numerous researchers have invented or borrowed in- dividual modules or building blocks and implemented them into low-level vision tasks, including residual learning [43, 95, 120], dense connections [95, 121], hierarchical struc- tures [37,41,42], multi-stage frameworks [16,34,111,113], and attention mechanisms [66,91,110,111].
+Recent research explorations on Vision Transformers (ViT) [11, 24, 57] have exempliﬁed their great potential as alternatives to the go-to CNN models.
+The elegance of ViT [24] has also motivated similar model designs with sim- pler global operators such as MLP-Mixer [87], gMLP [54], GFNet [76], and FNet [44], to name a few. Despite suc- cessful applications to many high-level tasks [4, 24, 57, 85, 89, 102, 104], the efﬁcacy of these global models on low- level enhancement and restoration problems has not been studied extensively. The pioneering works on Transform- ers for low-level vision [10, 15] directly applied full self- attention, which only accepts relatively small patches of ﬁxed sizes (e.g., 48×48). Such a strategy will inevitably cause patch boundary artifacts when applied on larger im- ages using cropping [15].
+Local-attention based Trans- formers [52, 97] ameliorate this issue, but they are also constrained to have limited sizes of receptive ﬁeld, or to lose non-locality [24, 93], which is a compelling property of Transformers and MLP models relative to hierarchical
+CNNs.
+To overcome these issues, we propose a generic image processing network, dubbed MAXIM, for low-level vision tasks.
+A key design element of MAXIM is the use of multi-axis approach (Sec. 3.2) that captures both local and global interactions in parallel. By mixing information on a single axis for each branch, this MLP-based operator be- comes ‘fully-convolutional’ and scales linearly with respect to image size, which signiﬁcantly increases its ﬂexibility for dense image processing tasks. We also deﬁne and build a pure MLP-based cross-gating module, which adaptively gate the skip-connections in the neck of MAXIM using the same multi-axis approach, and which further boosts perfor- mance. Inspired by recent restoration models, we develop a simple but effective multi-stage, multi-scale architecture consisting of a stack of MAXIM backbones.
+MAXIM achieves strong performance on a range of image process- ing tasks, while requiring very few number of parameters and FLOPs. Our contributions are:
+• A novel and generic architecture for image processing, dubbed MAXIM, using a stack of encoder-decoder back- bones, supervised by a multi-scale, multi-stage loss.
+• A multi-axis gated MLP module tailored for low-level vi- sion tasks, which always enjoys a global receptive ﬁeld, with linear complexity relative to image size.
+• A cross gating block that cross-conditions two separate features, which is also global and fully-convolutional.
+• Extensive experiments show that MAXIM achieves SOTA results on more than 10 datasets including denois- ing, deblurring, deraining, dehazing, and enhancement.
+2. Related Work Restoration models. Driven by recent enormous efforts on building vision benchmarks, learning-based models, espe- cially CNN models, have been developed that attain state- of-the-art performance on a wide variety of image enhance- ment tasks [15–17, 37, 50, 52, 81, 111].
+These increased performance gains can be mainly attributed to novel ar- chitecture designs, and/or task-speciﬁc modules and units.
+For instance, UNet [80] has incubated many successful encoder-decoder designs [20, 37, 111] for image restora- tion that improve on earlier single-scale feature process- ing models [45, 120].
+Advanced components developed for high-level vision tasks have been brought into low- level vision tasks as well.
+Residual and dense connec- tions [43, 95, 95, 120, 121], the multi-scale feature learn- ing [20,41,97], attention mechanisms [66,91,110,111,121], and non-local networks [53, 93, 121] are such good exam- ples. Recently, multi-stage networks [16,34,111,113] have attained promising results relative to the aforementioned single-stage models on the challenging deblurring and de- raining tasks [23, 34, 111]. These multi-stage frameworks are generally inspired by their success on higher-level prob- lems such as pose estimation [18, 48], action segmenta- tion [25,47], and image generation [116,117].
+Low-level vision Transformers. Transformers were origi- nally proposed for NLP tasks [90], where multi-head self- attention and feed-forward MLP layers are stacked to cap- ture non-local interactions between words. Dosovitskiy et al. coined the term Vision Transformer (ViT) [24], and demonstrated the ﬁrst pure Transformer model for image recognition.
+Several recent studies explored Transform- ers for low-level vision problems, e.g., the pioneering pre- trained image processing Transformer (IPT) [15]. Similar to ViT, IPT directly applies vanilla Transformers to image patches. The authors of [10] presented a spatial-temporal convolutional self-attention network that exploits local in- formation for video super-resolution. More recently, Swin- IR [52] and UFormer [97] apply efﬁcient window-based lo- cal attention models on a range of image restoration tasks.
+MLP vision models. More recently, several authors have argued that when using a patch-based architecture as in ViT, the necessity of complex self-attention mechanisms be- comes questionable. For instance, MLP-Mixer [87] adopts a simple token-mixing MLP to replace self-attention in ViT, resulting in an all-MLP architecture. The authors of [54] proposed the gMLP, which applies a spatial gating unit on visual tokens. ResMLP [88] adopts an Afﬁne transforma- tion as a substitute to Layer Normalization for acceleration.
+Very recent techniques such as FNet [44] and GFNet [76] demonstrate the simple Fourier Transform can be used as a competitive alternative to either self-attention or MLPs.
+3. Our Approach: MAXIM We present, to the best of our knowledge, the ﬁrst ef- fective general-purpose MLP architecture for low-level vi- sion, which we call Multi-AXIs MLP for image processing (MAXIM). Unlike previous low-level Transformers [10,15, 52, 97], MAXIM has several desired properties, making it intriguing for image processing tasks.
+First, MAXIM expresses global receptive ﬁelds on arbitrarily large im- ages with linear complexity; Second, it directly supports arbitrary input resolutions, i.e., being fully-convolutional;
+Lastly, it provides a balanced design of local (Conv) and global (MLP) blocks, outperforming SOTA methods with- out the necessity for large-scale pre-training [15].
+Y2
+￪x2
+￪x2
+￪x2
+￬x2
+￬x2 Multi-Axis Gated MLP Block Encoder Decoder Bottleneck Repeat x M
+CGB
+Dense Residual Channel Attention Block
+c (b) Encoder / Decoder / Bottleneck
+Skips
+￬x2
+￪x2
+￪x2
+￪x2 (a) MAXIM Backbone Encoder Encoder
+CGB
+CGB Decoder Decoder Repeat x 2
+Y (c) Cross Gating Block (CGB)
+Y3
+X3
+Dense
+Dense
+GELU LayerNorm
+Dense
+GELU
+Dense
+X2 LayerNorm
+G(Y2)
+G(X2)
+Dense
+Dense
+X Multi-Axis Cross Gating
+X
+X
+X1
+Y1
+Figure 2. MAXIM architecture. We take (a) an encoder-decoder backbone with each (b) encoder, decoder, and bottleneck containing a multi-axis gated MLP block (Fig. 3) as well as a residual channel attention block. The model is further boosted by (c) a cross gating block which allows global contextual features to gate the skip-connections. More detailed description can be found in Appendix A.2.
+3.1. Main Backbone The MAXIM backbone (Fig. 2a) follows the encoder- decoder design principles that originated with UNet [80].
+We have observed that operators having small footprints such as Conv3x3 are essential to the performance of UNet- like networks. Thus, we rely on a hybrid model design for each block (Fig. 2b) – Conv for local, and MLP for long- range interactions – to make the most of them.
+To allow long-range spatial mixing at different scales, we insert the multi-axis gated MLP block (MAB) into each encoder, decoder, and bottleneck (Fig. 2b), with a residual channel attention block (RCAB) [100,111] (LayerNorm- Conv-LeakyReLU-Conv-SE [31]) stacked subsequently.
+Inspired by the gated ﬁltering of skip connections [67, 71], we extend the gated MLP (gMLP) to build a cross gating block (CGB, Fig. 2c), which is an efﬁcient 2nd-order alter- native to cross-attention (3rd-order correlations), to interact, or condition two distinct features. We leverage the global features from Bottleneck (Fig. 2a) to gate the skip connec- tions, while propagating the reﬁned global features upwards to the next CGB. Multi-scale feature fusion [20,84,110] (red and blue lines) is utilized to aggregate multi-level informa- tion in the Encoder→CGB and CGB→Decoder dataﬂow.
+3.2. Multi-Axis Gated MLP Our work is inspired by the multi-axis blocked self- attention proposed in [123], which performs attention on more than a single axis. The attentions performed on two axes on blocked images correspond to two forms of sparse self-attention, namely regional and dilated attention. De- spite capturing local and global information in parallel, this module cannot accommodate image restoration or enhance- ment tasks where the test images are often of arbitrary sizes.
+We improve the ‘multi-axis’ concept for image process- ing tasks, by building a (split-head) multi-axis gated MLP block (MAB), as shown in Fig. 3. Instead of applying multi- axis attention in a single layer [123], we split in half the heads ﬁrst, each being partitioned independently. In the lo- cal branch, the half head of a feature of size (H, W, C/2) is blocked into a tensor of shape ( H
+b × W b , b × b, C/2), rep- resenting partitioning into non-overlapping windows each with size of (b×b); in the global branch, the other half head is gridded into the shape (d×d, H
+d × W d , C/2) using a ﬁxed (d × d) grid, with each window having size ( H
+d × W d ). For visualization, we set b = 2, d = 2 in Fig. 3. To make it fully-convolutional, we only apply the gated MLP (gMLP) block [54] on a single axis of each branch – the 2nd axis for the local branch and the 1st axis for the global branch – while sharing parameters on the other spatial axes. In- tuively, applying multi-axis gMLPs in parallel correspond to local and global (dilated) mixing of spatial information, respectively. Finally, the processed heads are concatenated and projected to reduce the number of channels, which are further combined using the long skip-connection from the input. It is worth noting that this approach provides an ad- vantage for our model over methods that process ﬁxed-size image patches [15] by avoiding patch boundary artifacts.
+Complexity analysis.
+The computational complexity of our proposed Multi-Axis gMLP block (MAB) is:
+Ω(MAB) = d2HWC
+|
+{z
+} Global gMLP + b2HWC
+|
+{z
+} Local gMLP + 10HWC2
+|
+{z
+} Dense layers
+,
+(1) which is linear with respect to image size HW, while other global models like ViT, Mixer, and gMLP are quadratic.
+Universality of the multi-axis approach. Our proposed parallel multi-axis module (Fig. 3) presents a principled way to apply 1D operators on 2D images in a scalable manner. It also allows for signiﬁcant ﬂexibility and uni- versality. For example, a straightforward replacement of a gMLP with a spatial MLP [87], self-attention [24], or even Fourier Transform [44, 76] leads to a family of MAXIM gMLP on 2nd Axis Concat
+Heads gMLP on 1st Axis
+Grid [2, 2]
+Block [2, 2] [6, 4, C]
+Split
+Heads 1 / 2 Heads [6, 4, C / 2] 1 / 2 Heads [6, 4, C / 2] Blocked Input [3 x 2, 2 x 2, C / 2] Gridded Input [2 x 2, 3 x 2, C / 2] Processed [6, 4, C / 2] Processed [4, 6, C / 2] 1 / 2 Heads [6, 4, C / 2] Unblock [2, 2] 1 / 2 Heads [6, 4, C / 2] Ungrid [2, 2] [6, 4, C]
+Local Branch Global Branch
+Dense
+GELU LayerNorm
+Dense shortcut shortcut gMLP Block
+Dense LayerNorm Spatial Proj
+Split
+Dense
+GELU LayerNorm
+Figure 3. Multi-axis gated MLP block (best viewed in color). The input is ﬁrst projected to a [6, 4, C] feature, then split into two heads.
+In the local branch, the half head is blocked into 3×2 non-overlapping [2, 2, C/2] patches, while we grid the other half using a 2×2 grid in the global branch. We only apply the gMLP block [54] (illustrated in the right gMLP Block) on a single axis of each branch - the 2nd axis for the local branch and the 1st axis for the global branch, while shared along the other spatial dimensions. The gMLP operators, which run in parallel, correspond to local and global (dilated) attended regions, as illustrated with different colors (i.e., the same color are spatially mixed using the gMLP operator). Our proposed block expresses both global and local receptive ﬁelds on arbitrary input resolutions.
+variants (see Sec. 4.3D), all sharing globality and fully- convolutionality. It is also easily extensible to any future 1D operator that may be deﬁned on, e.g., Language models.
+3.3. Cross Gating MLP Block A common improvement over UNet is to leverage con- textual features to selectively gate feature propagation in skip-connections [67,71], which is often achieved by using cross-attention [13,90]. Here we build an effective alterna- tive, namely cross-gating block (CGB, Fig. 2c), as an ex- tension of MAB (Sec. 3.2) which can only process a single feature. CGB can be regarded as a more general condition- ing layer that interacts with multiple features [13, 70, 90].
+We follow similar design patterns as those used in MAB.
+To be more speciﬁc, let X, Y be two input features, and X1, Y1 ∈RH×W ×C be the features projected after the ﬁrst Dense layers in Fig. 2c. Input projections are then applied:
+X2 = σ(W1LN(X1)) , Y2 = σ(W2LN(Y1))
+(2) where σ is the GELU activation [30], LN is Layer Nor- malization [5], and W1, W2 are MLP projection matrices.
+The multi-axis blocked gating weights are computed from X2, Y2, respectively, but applied reciprocally:
+ˆX = X2 ⊙G(Y2) , ˆY = Y2 ⊙G(X2)
+(3) where ⊙represents element-wise multiplication, and the function G(·) extracts multi-axis cross gating weights from the input using our proposed multi-axis approach (Sec. 3.2):
+G(x) = W5([W3Blockb(z1), W4Gridd(z2)])
+(4) where [·, ·] denotes concatenation. Here (z1, z2) are two in- dependent heads split from z along the channel dimension, where z represents the projected features x after activation:
+[z1, z2] = z = σ(W6LN(x)),
+(5) and W3, W4 are spatial projection matrices applied on the 2nd and 1st axis of the blocked/gridded features having ﬁxed window size b×b (Blockb), and ﬁxed grid size of d×d (Gridd), respectively. Finally, we adopt residual connec- tion from the inputs, following an output channel-projection that maintains the same channel dimensions as the inputs (X1, Y1), using projection matrices W7, W8, denoted by X3 = X1 + W7 ˆX , Y3 = Y1 + W8 ˆY.
+(6) The complexity of CGB is also tightly-bounded by Eq. (1).
+3.4. Multi-Stage Multi-Scale Framework We further adopt a multi-stage framework because we ﬁnd it more effective, as compared to scaling up the model width or height (see ablation Sec. 4.3A). We deem full resolution processing [16, 69, 77] a better approach than a multi-patch hierarchy [83, 111, 113], since the latter would potentially induce boundary effects across patches.
+To impose stronger supervision, we apply a multi-scale ap- proach [18, 20, 48] at each stage to help the network learn.
+We leverage the supervised attention module [111] to prop- agate attentive features progressively along the stages. We leverage the cross-gating block (Sec. 3.3) for cross-stage feature fusion. We refer the reader to Fig. 9 for details.
+Formally, given an input image I ∈RH×W ×3, we ﬁrst extract its multi-scale variants by downscaling: In, n = 1, ..., N. MAXIM predicts multi-scale restored outputs at each stage s of S stages, yielding a total of S × N outputs:
+SIDD [2] DND [72] Average Method
+PSNR↑
+SSIM↑
+PSNR↑
+SSIM↑
+PSNR↑
+SSIM↑ DnCNN [120]
+23.66
+0.583
+32.43
+0.790
+28.04
+0.686 MLP [7]
+24.71
+0.641
+34.23
+0.833
+29.47
+0.737 BM3D [21]
+35.65
+0.685
+34.51
+0.851
+35.08
+0.768 CBDNet* [29]
+30.78
+0.801
+38.06
+0.942
+34.42
+0.872 RIDNet* [3]
+38.71
+0.951
+39.26
+0.953
+38.99
+0.952 AINDNet* [38]
+38.95
+0.952
+39.37
+0.951
+39.16
+0.952 VDN [107]
+39.28
+0.956
+39.38
+0.952
+39.33
+0.954 SADNet* [12]
+39.46
+0.957
+39.59
+0.952
+39.53
+0.955 CycleISP* [109]
+39.52
+0.957
+39.56
+0.956
+39.54
+0.957 MIRNet [110]
+39.72
+0.959
+39.88
+0.956
+39.80
+0.958 MPRNet [111]
+39.71
+0.958
+39.80
+0.954
+39.76
+0.956 MAXIM-3S
+39.96
+0.960
+39.84
+0.954
+39.90
+0.957
+Table 1. Denoising results. Our model is only trained on SIDD [2] and evaluated on SIDD [2] and DND [72], where * denotes meth- ods using additional training data.
+Rs,n. Despite being multi-stage, MAXIM is trained end- to-end with losses accumulating across stages and scales:
+L =
+S
+X
+s=1
+N
+X
+n=1 [Lchar(Rs,n, Tn) + λLfreq(Rs,n, Tn)],
+(7) where Tn denotes (bilinearly-rescaled) multi-scale target images, and Lchar is the Charbonnier loss [111]:
+Lchar(R, T) =
+p ∥R −T∥2 + ϵ2,
+(8) where we set ϵ = 10−3. Lfreq is the frequency reconstruc- tion loss that enforces high-frequency details [20,35]:
+Lfreq(R, T) = ∥F(R) −F(T)∥1
+(9) where F(·) represents the 2D Fast Fourier Transform. We used λ = 0.1 as the weighting factor in all experiments.
+4. Experiments We aim at building a generic backbone for a broad spectrum of image processing tasks.
+Thus, we evalu- ated MAXIM on ﬁve different tasks: (1) denoising, (2) deblurring, (3) deraining, (4) dehazing, and (5) enhance- ment (retouching) on 17 different datasets (summarized in Tab. 8. More comprehensive results and visualizations can be found in Appendix A.6.
+4.1. Experimental Setup Datasets and metrics. We measured PSNR and SSIM [96] metrics between ground truth and predicted images to make quantitative comparisons. We used SIDD [2] and DND [72] for denoising, GoPro [62], HIDE [81], and RealBlur [79] for debluring, a combined dataset Rain13k used in [111] for deraining. The RESIDE [46] is used for dehazing, while Five-K [8] and LOL [98] are evaluated for enhancement.
+Training details. Our proposed MAXIM model is end- to-end trainable and requires neither large-scale pretraining GoPro [62] HIDE [81] Average Method PSNR↑SSIM↑PSNR↑SSIM↑ PSNR↑SSIM↑ DeblurGAN [40]
+28.70
+0.858
+24.51
+0.871
+26.61
+0.865 Nah et al. [62]
+29.08
+0.914
+25.73
+0.874
+27.41
+0.894 Zhang et al. [118]
+29.19
+0.931
+-
+-
+-
+- DeblurGAN-v2 [41]
+29.55
+0.934
+26.61
+0.875
+28.08
+0.905 SRN [86]
+30.26
+0.934
+28.36
+0.915
+29.31
+0.925 Shen et al. [81]
+-
+-
+28.89
+0.930
+-
+- Gao et al. [28]
+30.90
+0.935
+29.11
+0.913
+30.01
+0.924 DBGAN [119]
+31.10
+0.942
+28.94
+0.915
+30.02
+0.929 MT-RNN [69]
+31.15
+0.945
+29.15
+0.918
+30.15
+0.932 DMPHN [113]
+31.20
+0.940
+29.09
+0.924
+30.15
+0.932 Suin et al. [83]
+31.85
+0.948
+29.98
+0.930
+30.92
+0.939 MPRNet [111]
+32.66
+0.959
+30.96
+0.939
+31.81
+0.949 Pretrained-IPT [15]
+32.58
+-
+-
+-
+-
+- MIMO-UNet+ [20]
+32.45
+0.957
+29.99
+0.930
+31.22
+0.944 HINet [16]
+32.71
+0.959
+30.32
+0.932
+31.52
+0.946 MAXIM-3S
+32.86
+0.961
+32.83
+0.956
+32.85
+0.959
+Table 2. Deblurring results. Our model is trained on GoPro [62] and evaluated on the GoPro and the HIDE dataset [81].
+RealBlur-R [79] RealBlur-J [79] Average Method PSNR↑SSIM↑PSNR↑SSIM↑ PSNR↑SSIM↑ Hu et al. [33]
+33.67
+0.916
+26.41
+0.803
+30.04
+0.860 Nah et al. [62]
+32.51
+0.841
+27.87
+0.827
+30.19
+0.834 DeblurGAN [40]
+33.79
+0.903
+27.97
+0.834
+30.88
+0.869 Pan et al. [68]
+34.01
+0.916
+27.22
+0.790
+30.62
+0.853 Xu et al. [103]
+34.46
+0.937
+27.14
+0.830
+30.8
+0.884 DeblurGAN-v2 [41]
+35.26
+0.944
+28.70
+0.866
+31.98
+0.905 Zhang et al. [118]
+35.48
+0.947
+27.80
+0.847
+31.64
+0.897 SRN [86]
+35.66
+0.947
+28.56
+0.867
+32.11
+0.907 DMPHN [113]
+35.70
+0.948
+28.42
+0.860
+32.06
+0.904 MPRNet [111]
+35.99
+0.952
+28.70
+0.873
+32.35
+0.913 MAXIM-3S
+35.78
+0.947
+28.83
+0.875
+32.31
+0.911 †DeblurGAN-v2
+36.44
+0.935
+29.69
+0.870
+33.07
+0.903 †SRN [86]
+38.65
+0.965
+31.38
+0.909
+35.02
+0.937 †MPRNet [111]
+39.31
+0.972
+31.76
+0.922
+35.54
+0.947 †MIMO-UNet+ [20]
+-
+-
+32.05
+0.921
+-
+- †MAXIM-3S
+39.45
+0.962
+32.84
+0.935
+36.15
+0.949
+Table 3. Deblurring results on RealBlur [79]. † denotes methods that are trained on RealBlur, while those without † indicate meth- ods trained only on GoPro.
+nor progressive training. The network is trained on 256×256 random-cropped patches. We train different iterations for each task. We used random horizontal and vertical ﬂips, 90◦rotation, and MixUp [112] with probability 0.5 for data augmentation. We used the Adam optimizer [39] with an initial learning rate of 2×10−4, which are steadily decreased to 10−7 with the cosine annealing decay [59]. When test- ing, we padded the input images to be a multiplier of 64×64 using symmetric padding on both sides. After inference, we cropped the padded image back to original size. More train- ing details on each task can be found in Appendix A.1.
+Architectural conﬁguration. We designed two MAXIM variants: a two-stage model called MAXIM-2S, and a three- stage model, MAXIM-3S, for different tasks. We start with 32 initial channels for feature extraction, with 3 downsam- pling layers, where the features contract from 2562 × 32,
+Input Target VDN [107] DANet [108] MIRNet [110] CycleISP [109] MPRNet [111] MAXIM-3S
+Figure 4. Denoising comparisons. The example from SIDD [2] shows that our method produces cleaner denoising results.
+Input Target DMPHN [113] Suin et al. [83] MPRNet [111] HINet [16] MIMO-UNet [20] MAXIM-3S
+Figure 5. Deblurring comparisons. The top row shows an example from GoPro [62] while the second row shows one from HIDE [81].
+1282 × 64, 642 × 128, to 322 × 256 processed by two Bottlenecks (Fig. 2a), then symmetrically expanded back to full resolution. The number of parameters and required FLOPs of MAXIM-2S and MAXIM-3S, when applied on a 256 × 256 image are shown in the last two rows of Tab. 7A.
+4.2. Main Results Denoising. We report in Tab. 1 numerical comparisons on the SIDD [2] and DND [72] datasets. As may be seen, our method outperformed previous SOTA techniques, e.g., MIRNet [110] by 0.24 dB of PSNR on SIDD while obtain- ing competitive PSNR (39.84 dB) on DND. Fig. 4 shows visual results on SIDD. Our method clearly removes real noise while maintaining ﬁne details, yielding visually pleas- ant results to the other methods.
+Deblurring.
+Tab. 2 shows the quantitative comparison of MAXIM-3S against SOTA deblurring methods on two synthetic blur datasets: GoPro [62] and HIDE [81]. Our method achieves 0.15 dB gain in PSNR over the previ- ous best model HINet [16]. It is notable that the GoPro- trained MAXIM-3S model generalizes extremely well on the HIDE dataset, setting new SOTA PSNR values: 32.83 dB. We also evaluated on real-world blurry images from RealBlur [79] under two settings: (1) directly applied the GoPro-trained model on RealBlur, and (2) ﬁne-tuned the model on RealBlur. Under setting (1), MAXIM-3S ranked ﬁrst on RealBlur-J subset while obtaining the top two per- formance on RealBlur-R. Fig. 5 shows visual comparisons of the evaluated models on GoPro [62], HIDE [81] and Re- alBlur [79], respectively. It may be observed that our model recovers text extremely well, which may be attributed to the use of multi-axis MLP module within each block that globally aggregates repeated patterns across various scales.
+Deraining. Following previous work [34, 111], we com- puted the performance metrics using the Y channel (in YCbCr color space). Tab. 4 shows quantitative comparisons with previous methods. As may be seen, our model im- proved over the SOTA performances on all datasets. The av- erage PSNR gain of our model over the previous best model HINet [16] is 0.24 dB. We demonstrate some challenging examples in Fig. 6, which demonstrates that our method consistently delivered faithfully recovered images without introducing any noticeable visual artifacts.
+Dehazing. We report our comparisons against SOTA mod- els in Tab. 5. Our model surpassed the previous best model by 0.94 dB and 0.62 dB of PSNR on the SOTS [46] indoor and outdoor sets. Fig. 7 shows that our model recovered im- ages of better quality on both ﬂat regions as well as textures, while achieving a harmonious global tone.
+Enhancement / Retouching.
+As Tab. 6 illustrates, our model achieved the best PSNR and SSIM values on FiveK [8] and LOL [98], respectively. As the top row of
+Fig. 8 suggests, MAXIM recovered diverse naturalistic col- ors as compared to other techniques. Regarding the bottom example, while MIRNet [110] obtained a higher PSNR, we consistently observed that our model attains visually better quality with sharper details and less noise. Moreover, the far more perceptually relevant SSIM index indicates a sig- niﬁcant advantage of MAXIM-2S relative to MIRNet.
+Other benchmarks. Due to space limitations, we detail the
+Input Target RESCAN [49] PreNet [77] MSPFN [34] MPRNet [111] HINet [16] MAXIM-2S
+Figure 6. Deraining comparisons. The top and bottom rows present examples from Rain100L [105] and Test100 [115], respectively, demonstrating the ability of MAXIM to remove rain streaks while recovering more details, hence yielding more visually pleasant results.
+Input Target GCANet [14] GridDehaze [55] DuRN [56] MSBDN [23] FFA-Net [74] MAXIM-2S
+Figure 7. Dehazing comparisons. The top and bottom rows exemplify visual results from the SOTS indoor and outdoor sets [46].
+Rain100L [105] Rain100H [105] Test100 [115] Test1200 [114] Test2800 [27] Average Method PSNR↑SSIM↑PSNR↑SSIM↑PSNR↑SSIM↑PSNR↑SSIM↑PSNR↑SSIM↑PSNR↑SSIM↑ DerainNet [26]
+27.03
+0.884
+14.92
+0.592
+22.77
+0.810
+23.38
+0.835
+24.31
+0.861
+22.48
+0.796 SEMI [99]
+25.03
+0.842
+16.56
+0.486
+22.35
+0.788
+26.05
+0.822
+24.43
+0.782
+22.88
+0.744 DIDMDN [114]
+25.23
+0.741
+17.35
+0.524
+22.56
+0.818
+29.65
+0.901
+28.13
+0.867
+24.58
+0.770 UMRL [106]
+29.18
+0.923
+26.01
+0.832
+24.41
+0.829
+30.55
+0.910
+29.97
+0.905
+28.02
+0.880 RESCAN [49]
+29.80
+0.881
+26.36
+0.786
+25.00
+0.835
+30.51
+0.882
+31.29
+0.904
+28.59
+0.857 PreNet [77]
+32.44
+0.950
+26.77
+0.858
+24.81
+0.851
+31.36
+0.911
+31.75
+0.916
+29.42
+0.897 MSPFN [34]
+32.40
+0.933
+28.66
+0.860
+27.50
+0.876
+32.39
+0.916
+32.82
+0.930
+30.75
+0.903 MPRNet [111]
+36.40
+0.965
+30.41
+0.890
+30.27
+0.897
+32.91
+0.916
+33.64
+0.938
+32.73
+0.921 HINet [16]
+37.20
+0.969
+30.63
+0.893
+30.26
+0.905
+33.01
+0.918
+33.87
+0.940
+33.00
+0.925 MAXIM-2S
+38.06
+0.977
+30.81
+0.903
+31.17
+0.922
+32.37
+0.922
+33.80
+0.943
+33.24
+0.933
+Table 4. Deraining comparisons. Our method consistently yields better quality metrics with respect to both PSNR or SSIM on all the tested datasets: Rain100L [105], Rain100H [105], Test100 [115], Test1200 [114], Test2800 [27] SOTS-Indoor SOTS-Outdoor Method PSNR↑SSIM↑PSNR↑SSIM↑ DehazeNet [9]
+21.14
+0.847
+22.46
+0.851 GFN [78]
+22.30
+0 880
+21.55
+0.844 GCANet [14]
+30.23
+0.959
+19.98
+0.704 GridDehaze [55]
+32.14
+0.983
+30.86
+0.981 GMAN [58]
+27.93
+0.896
+28.47
+0.944 MSBDN [23]
+33.79
+0.984
+23.36
+0.875 DuRN [56]
+32.12
+0.980
+24.47
+0.839 FFA-Net [74]
+36.39
+0.989
+33.57
+0.984 AECR-Net [101]
+37.17
+0.990
+-
+- MAXIM-2S
+38.11
+0.991
+34.19
+0.985
+Table 5. Dehazing comparisons. Our model achieved the best results on both indoor and outdoor scenes.
+outcomes of our experiments on the REDS deblurring [63] and the Raindrop removal task [73] in Appendix A.5.
+4.3. Ablation We conduct extensive ablation studies to validate the proposed multi-axis gated MLP block, cross-gating block, and multi-stage multi-scale architecture. The evaluations were performed on the GoPro dataset [62] trained on image patches of size 256 × 256 for 106 iterations. We used the MAXIM-2S model as the test-bed for Ablation-A and -B.
+A. Individual components.
+We conducted an ablation by progressively adding (1) inter-stage cross-gating blocks (CGBIS), (2) a supervised attention module (SAM), (3) cross-stage cross-gating blocks (CGBCS, and (4) the multi- scale supervision (MS-Sp). Tab. 7A indicates a PSNR gain of 0.25, 0.63, 0.36, 0.26 dB for each respective component.
+B. Effects of multi-axis approach. We further examined the necessity of our proposed multi-axis approach, as shown in Tab. 7B. We conducted experiments over (1) baseline UNet, (2) by adding the local branch of MAB (MABℓ),
+Input Target CycleGAN [124] Exposure [32] DPE [19] EnlightenGAN UEGAN [65] MAXIM-2S
+Input Target Retinex [98] GLAD [92] KinD [122] EnlightenGAN MIRNet [110] MAXIM-2S
+Figure 8. Retouching and low-light enhancement comparisons. The top row shows an example from the MIT-Adobe FiveK dataset [8], while the bottom row exempliﬁes a comparison from LOL [98]. Our model generated variegated and more naturalistic colors (top) for retouching, while achieving clearer and brighter visual enhancements in the bottom example.
+FiveK [8] LOL [98] Method
+PSNR↑
+SSIM↑ Method
+PSNR↑
+SSIM↑ CycleGAN [124]
+18.23
+0.835 Retinex [98]
+16.77
+0.559 Exposure [32]
+22.35
+0.861 GLAD [92]
+19.71
+0.703 EnlightenGAN
+17.74
+0.828 EnlightenGAN
+17.48
+0.657 DPE [19]
+24.08
+0.922 KinD [122]
+20.37
+0.804 UEGAN [65]
+25.00
+0.929 MIRNet [110]
+24.14
+0.830 MAXIM-2S
+26.15
+0.945 MAXIM-2S
+23.43
+0.863
+Table 6. Enhancement results on FiveK [8] and LOL [98].
+(3) by adding the global branch of MAB (MABg), (4) by adding the local branch of CGB (CGBℓ), (5) by adding the global branch of CGB (CGBg). Note that the huge jump (+1.04 dB) of PSNR by adding MABℓcan be largely at- tributed to the addition of input and output channel projec- tion layers, because we also observe a high performance of 31.42 dB PSNR if only MABg is added. Overall, we ob- served a major improvement when including MAB, and a relatively minor gain when adding CGB.
+C. Why multi-stage?
+Towards understanding this, we scaled up MAXIM in terms of width (channels), depth (downscaling steps), and the number of stages. Tab. 7C sug- gests that packing the backbone into multi-stages yields the best performance vs. complexity tradeoff (32.44 dB, 22.2 M, 339.2 G), compared to making it wider or deeper.
+D. Beyond gMLP: the MAXIM families. As described in Sec. 3.2, our proposed multi-axis approach (Fig. 3) of- fers a scalable way of applying any 1D operators on (high- resolution) images, with linear complexity relative to image size while maintaining fully-convolutional. We conducted a pilot study using MAXIM-1S and -2S on SIDD [2] to ex- plore the MAXIM families: MAXIM-FFT, -MLP, -gMLP (modeled in this paper), -SA, where we use the Fourier Transform ﬁlter [44, 76], spatial MLP [87], gMLP [54], and self-attention [24] on spatial axes using the same multi- axis approach (Fig. 3). As Tab. 7D shows, the gMLP and CGBIS SAM CGBCS MS-Sp PSNR
+30.73
+
+30.98
+
+
+31.61
+
+
+
+31.97
+
+
+
+
+32.23 A. Individual components.
+MABℓMABg CGBℓCGBg PSNR
+30.48
+
+31.52
+
+
+31.68
+
+
+
+31.84
+
+
+
+
+31.91 B. Effects of multi-axis approach.
+S W D PSNR Params FLOPs
+Base 1 32 3
+31.08
+6.1M
+93.6G
+Wider 1 64 3
+32.09 19.4M 309.9G 1 96 3
+32.31 41.7M 648.9G Deeper 1 32 4
+31.17 19.8M 121.6G 1 32 5
+31.43 75.0M 153.4G
+More 2 32 3
+31.82 14.1M 216.4G stages 3 32 3
+32.44 22.2M 339.2G C. Why multi-stage?
+Variant PSNR Params FLOPs M1-FFT
+39.67
+4.1M
+71G M1-MLP
+39.75
+5.4M
+83G M1-gMLP
+39.80
+6.1M
+93G
+M1-SA
+39.79
+5.3M
+111G M2-FFT
+39.74
+10.1M
+172G M2-MLP
+39.70
+12.7M
+195G M2-gMLP
+39.83
+14.1M
+216G
+M2-SA
+39.85
+12.5M
+250G D. Beyond gMLP.
+Table 7. Ablation studies. Components in subtable A and B are deﬁned in Sec. 4.3. S, W, and D denote the number of stages, width, and depth, respectively. M1 and M2 in subtable D denote MAXIM-1S and MAXIM-2S models, respectively.
+self-attention variants achieved the best performance, while the FFT and MLP families were more computationally efﬁ- cient. We leave deeper explorations to future works.
+5. Conclusion We have presented a generic network for restoration or enhancement tasks, dubbed MAXIM, inspired by recently popular MLP-based global models.
+Our work suggests an effective and efﬁcient approach for applying gMLP to low-level vision tasks to gain global attention, a missing attribute of basic CNNs. Our gMLP initialization of the MAXIM family signiﬁcantly advances state-of-the-arts in several image enhancement and restoration tasks with mod- erate complexity. We demonstrate a few applications, but there are many more possibilities beyond the scope of this work which could signiﬁcantly beneﬁt by using MAXIM.
+Our future work includes exploring more efﬁcient models for extremely high-resolution image processing, as well as training large models that can adapt on multiple tasks.
+Broader impacts. The proposed model can be used as an effective tool to enhance and retouch daily photos. How- ever, enhancing techniques such as denoising and deblur- ring are vulnerable to malicious use for privacy concerns.
+The models trained on speciﬁc data may express bias. These issues should be responsibly taken care of by researchers.
+6. Acknowledgment We thank Junjie Ke, Mauricio Delbracio, Sungjoon Choi, Irene Zhu, Innfarn Yoo, Huiwen Chang, and Ce Liu for valuable discussions and feedback.
+A. Appendix A.1. Datasets and Training Details All the datasets used in the paper are summarized in Tab. 8. We describe details of training for each dataset in the following. Note that we used the ℓ2 loss for the dehaz- ing task while using the loss deﬁned in the main paper for all the other tasks.
+Image Denoising.
+We trained our model on 320 high- resolution images provided in SIDD [2] and evaluated on 1,280 (256 × 256) and 1,000 (512 × 512) images provided by authors of SIDD [2] and DND [72], respectively. The results on DND were obtained via the online server [1]. We cropped the training images into 512 × 512 patches with a stride of 256 to prepare the training patches. We trained the MAXIM-3S model for 600k steps with a batch size of 256.
+Image Deblurring. We trained our model on 2,103 image pairs from GoPro [62]. To demonstrate generalization abil- ity, we evaluated our GoPro trained model on 1,111 pairs of the GoPro evaluation set, 2,025 images in the HIDE dataset [81], as well as the RealBlur dataset [79], which contains 980 paired images of camera JPEG output and RAW images, respectively.
+We cropped training images from GoPro into 512 × 512 patches with a stride of 128 to generate training patches. We trained our MAXIM-3S model over 600k steps with a batch size of 256. For evalu- ation on RealBlur setting (2) (see main paper), we loaded the GoPro pre-trained checkpoint and ﬁne-tuned for 70k and 15k iterations on RealBlur-J and RealBlur-R, respec- tively. Additionally, we trained our model on 24,000 images from the REDS dataset of the NTIRE 2021 Image Deblur- ring Challenge Track 2 JPEG artifacts [63]. For evaluation, we followed the settings in the NTIRE 2021 Challenge on Image Deblurring [64], i.e., we used 300 images in the vali- dation set of REDS. We trained from scratch for 10k epochs on REDS [63].
+Task Dataset #Train
+#Test Test Dubname Denoising SIDD [2]
+40
+SIDD DND [72]
+50
+DND Deblurring GoPro [62]
+2103
+1111
+GoPro HIDE [81]
+2025
+HIDE RealBlur-J [79]
+3758 RealBlur-J RealBlur-R [79]
+3758 RealBlur-R REDS [63]
+24000
+REDS Deraining Rain14000 [27]
+11200
+2800 Test2800 Rain1800 [105]
+1800
+- Rain800 [115]
+98 Test100 Rain100H [105]
+100 Rain100H Rain100L [105]
+100 Rain100L Rain1200 [114]
+1200 Test1200 Rain12 [51]
+0
+- Raindrop [73]
+58 Raindrop-A Raindrop [73]
+239 Raindrop-B Dehazing RESIDE-ITS [46]
+13990 SOTS-Indoor RESIDE-OTS [46] 313950 SOTS-Outdoor Enhancement MIT-Adobe FiveK [8]
+4500
+FiveK (Retouching) LOL [98]
+15
+LOL
+Table 8. Dataset summary on ﬁve image processing tasks.
+Image Deraining. Following [34, 111], we used a com- posite training set containing 13,712 clean-rain image pairs collected from multiple datasets [27,51,105,105,114,115].
+Evaluation was performed on ﬁve test sets, Rain100H [105], Rain100L [105], Test100 [115], Test1200 [114], and Test2800 [27].
+We trained our MAXIM-2S model over 500k steps with a batch size of 512. For the raindrop re- moval task, we trained MAXIM-2S on 861 pairs of training images in Raindrop dataset [73] for 80k steps with a batch size of 512, and evaluate on testset A (58 images) and testset B (239 images), respectively.
+Image Dehazing. The RESIDE dataset [46] contains two subsets: Indoor Training Set (ITS) which contains 13,990 hazy images generated from 1399 clean ones, and Out- door Training Set (OTS) that consists of 313,950 hazing images synthesized from 8,970 haze-free outdoor scenes.
+We evaluated our model on the Synthetic Objective Testing Set (SOTS) [46]: 500 indoor images for ITS-trained, and 500 outdoor images for OTS-trained models, respectively.
+We trained for 10k and 500 epochs on RESIDE-ITS and RESIDE-OTS using the ℓ2 loss.
+Image Enhancement. We used the MIT-Adobe FiveK [8] dataset provided by [65] for the retouching evaluation: the ﬁrst 4,500 images for training and the rest 500 for testing.
+We cropped training images into 512 × 512 patches with a stride of 256. We also used the LOL dataset [98] which includes 500 pairs of images for low-light enhancement. We trained our model on 485 training images and evaluated on 15 test images. We trained for 14k and 180k steps on FiveK and LOL, respectively.
+A.2. Architecture Details Our proposed general multi-stage and multi-scale frame- work is illustrated in Fig. 9, where each stage uses a
+F2
+R3,3
+R3,2
+R3,1
+F1
+F3
+I3
+R2,2
+R1,3
+R1,2
+R1,1
+I2
+￬x2
+￬x2
+I1
+I2
+I3
+Loss Stage 2, …, N-1 Stage 1 Stage N
+Loss
+Loss Repeat x (N-2)
+I1
+I3
+I1
+I2
+F2
+F1
+F3
+R2,3
+R2,1 MAXIM Backbone
+Conv Encoder Decoder
+SAM
+CGB
+A1
+A2
+A3
+E1
+E2
+E3 Bottleneck
+Figure 9. We adopt a general multi-stage framework to improve the performance of MAXIM for challenging restoration tasks. Inspired by [16,111], we employ the supervised attention module (SAM) and cross-stage feature fusion to help later stages learn. Unlike previous approaches, our MAXIM backbone attains global perception at each layer in each stage due to the proposed multi-axis MLP approaches, making it more powerful in learning global interactions in both low-level and high-level features.
+single-stage MAXIM backbone, which is illustrated in the main paper. We leveraged the multi-scale input-output ap- proach [20] to deeply supervise each stage. Speciﬁcally, given an input image I ∈RH×W ×3, we used the near- est neighbour downscaling method [20] to generate multi- scale input variants: In, n = 1, 2, 3, while we adopted a bilinear downscaler to produce the ground truth variants:
+Tn, n = 1, 2, 3. For each stage, we extracted shallow fea- tures from the inputs at each scale using Conv3x3. Except for the ﬁrst stage, we fused the shallow features with atten- tion features coming from the previous supervised attention module (SAM) [111] using a cross gating block (CGB). We also employed cross-stage feature fusion [16, 111] to help later stages, where the intermediate Encoder and Decoder features from the previous stage are fused with features en- coded at the current stage using a CGB (blue lines in Fig. 9).
+A.2.1 Conﬁgurations The detailed speciﬁcations of the Encoder part for a single- stage MAXIM are shown in Tab. 9. We also provide the input and output shapes of each block and layer.
+Here Conv3x3 s1 w32 means a Conv layer with 3x3 kernels, stride 1, and 32 channels. MAB and RCAB are the two major components in Encoder / Decoder / Bottleneck. Note that in Bottleneck blocks, we use (Conv1x1) layers to re- place Conv3x3 in RCAB.
+The Decoder part of MAXIM is symmetric with respect to Tab. 9, and has the same conﬁguration. For the CGB necks, we used b = d = 16 for the depths 1 and 2, while b = d = 8 is adopted for depth 3. Basically, we set the block and grid sizes as 16 for high-resolution stages (i.e. feature size ≥128) and 8 for low-resolution stages (i.e. feature size n (gh gw) (fh fw) c", gh=grid_height, gw=grid_width, fh=patch_size[0], fw=patch_size[1]) return x def unblock_images(x, grid_size, patch_size):
+x = einops.rearrange(x, "n (gh gw) (fh fw) c -> n (gh fh) (gw fw) c", gh=grid_size[0], gw=grid_size[1], fh=patch_size[0], fw=patch_size[1]) return x class SpatialGatingUnit(nn.Module):
+"""Gated MLP applied on a specified axis: -3 for grid and -2 for block.""" @nn.compact def __call__(self, x, axis=-3):
+u, v = jnp.split(x, 2, axis=-1) v = nn.LayerNorm()(v) n = x.shape[axis] # get spatial dim at the ’grid’ or ’block’ axis v = jnp.swapaxes(v, -1, axis) v = nn.Dense(n)(v) v = jnp.swapaxes(v, -1, axis) return u * (v + 1.) class SpatialGmlpLayer(nn.Module):
+"""Gated MLP applied on a specified axis: -3 for grid and -2 for block.""" grid_size: Sequence[int] block_size: Sequence[int] @nn.compact def __call__(self, x, axis=-3):
+n, h, w, num_channels = x.shape if axis=-3: # for grid gMLP layer gh, gw = self.grid_size fh, fw = h // gh, w // gw elif axis=-2: # for block gMLP layer fh, fw = self.block_size gh, gw = h // fh, w // fw x = block_images(x, patch_size=(fh, fw)) y = nn.LayerNorm()(x) y = nn.Dense(num_channels * 2)(y) y = nn.gelu(y) y = SpatialGatingUnit()(y, axis=axis) y = nn.Dense(num_channels)(y) x = x + y x = unblock_images(x, grid_size=(gh, gw), patch_size=(fh, fw)) return x class MultiAxisGmlpBlock(nn.Module):
+block_size: Sequence[int] grid_size: Sequence[int] @nn.compact def __call__(self, x):
+shortcut = x n, h, w, num_channels = x.shape x = nn.LayerNorm()(x) x = nn.Dense(num_channels * 2)(x) x = nn.gelu(x)
+# split two heads, then applied grid gMLP and block gMLP respectively.
+u, v = jnp.split(x, 2, axis=-1) u = SpatialGmlpLayer(grid_size=self.grid_size)(u, axis=-3) v = SpatialGmlpLayer(block_size=self.block_size)(v, axis=-2)
+# Concat and output projection x = jnp.concatenate([u, v], axis=-1) x = nn.Dense(num_channels)(x) x = x + shortcut return x
+References [1] Darmstadt
+noise dataset.
+https://noise.visinf.tu- darmstadt.de/benchmark, 2017.
+Accessed: 2021-10-30.
+[2] Abdelrahman Abdelhamed, Stephen Lin, and Michael S Brown. A high-quality denoising dataset for smartphone cameras. In CVPR, pages 1692–1700, 2018. 1, 5, 6, 8, 9, 11, 12, 14 [3] Saeed Anwar and Nick Barnes. Real image denoising with feature attention. In CVPR, pages 3155–3164, 2019. 5 [4] Anurag Arnab, Mostafa Dehghani, Georg Heigold, Chen Sun, Mario Luˇci´c, and Cordelia Schmid. Vivit: A video vision transformer. arXiv preprint arXiv:2103.15691, 2021.
+[5] Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton.
+Layer normalization.
+arXiv preprint arXiv:1607.06450,
+2016. 4 [6] James Bradbury,
+Roy Frostig,
+Peter Hawkins, Matthew James Johnson, Chris Leary, Dougal Maclaurin, George Necula, Adam Paszke, Jake VanderPlas, Skye Wanderman-Milne, and Qiao Zhang.
+JAX: composable transformations of Python+NumPy programs, 2018. 11 [7] Harold C Burger, Christian J Schuler, and Stefan Harmel- ing. Image denoising: Can plain neural networks compete with bm3d? In CVPR, pages 2392–2399. IEEE, 2012. 5 [8] Vladimir Bychkovsky, Sylvain Paris, Eric Chan, and Fr´edo Durand.
+Learning photographic global tonal adjustment with a database of input/output image pairs.
+In CVPR, pages 97–104. IEEE, 2011. 1, 5, 6, 8, 9, 12, 27 [9] Bolun Cai, Xiangmin Xu, Kui Jia, Chunmei Qing, and Dacheng Tao. Dehazenet: An end-to-end system for single image haze removal. IEEE TIP, 25(11):5187–5198, 2016.
+[10] Jiezhang Cao, Yawei Li, Kai Zhang, and Luc Van Gool.
+Video super-resolution transformer.
+arXiv preprint arXiv:2106.06847, 2021. 1, 2 [11] Nicolas Carion, Francisco Massa, Gabriel Synnaeve, Nico- las Usunier, Alexander Kirillov, and Sergey Zagoruyko.
+End-to-end object detection with transformers. In ECCV, pages 213–229. Springer, 2020. 1 [12] Meng Chang, Qi Li, Huajun Feng, and Zhihai Xu. Spatial- adaptive network for single image denoising.
+In ECCV, pages 171–187. Springer, 2020. 5 [13] Chun-Fu Chen, Quanfu Fan, and Rameswar Panda.
+Crossvit:
+Cross-attention multi-scale vision transformer for image classiﬁcation. arXiv preprint arXiv:2103.14899,
+2021. 4 [14] Dongdong Chen, Mingming He, Qingnan Fan, Jing Liao, Liheng Zhang, Dongdong Hou, Lu Yuan, and Gang Hua.
+Gated context aggregation network for image dehazing and deraining. In 2019 IEEE winter conference on applications of computer vision (WACV), pages 1375–1383. IEEE, 2019.
+7, 25 [15] Hanting Chen, Yunhe Wang, Tianyu Guo, Chang Xu, Yip- ing Deng, Zhenhua Liu, Siwei Ma, Chunjing Xu, Chao Xu, and Wen Gao. Pre-trained image processing transformer. In CVPR, pages 12299–12310, 2021. 1, 2, 3, 5, 11 [16] Liangyu Chen, Xin Lu, Jie Zhang, Xiaojie Chu, and Cheng- peng Chen. Hinet: Half instance normalization network for image restoration. In CVPRW, pages 182–192, 2021. 1, 2, 4, 5, 6, 7, 10, 11, 15, 16, 18, 19 [17] Li-Heng Chen, Christos G Bampis, Zhi Li, Andrey Norkin, and Alan C Bovik. Proxiqa: A proxy approach to percep- tual optimization of learned image compression. IEEE TIP, 30:360–373, 2020. 1, 2 [18] Yilun Chen, Zhicheng Wang, Yuxiang Peng, Zhiqiang Zhang, Gang Yu, and Jian Sun. Cascaded pyramid network for multi-person pose estimation. In CVPR, pages 7103– 7112, 2018. 2, 4 [19] Yu-Sheng Chen, Yu-Ching Wang, Man-Hsin Kao, and Yung-Yu Chuang. Deep photo enhancer: Unpaired learn- ing for image enhancement from photographs with gans. In CVPR, pages 6306–6314, 2018. 8, 27 [20] Sung-Jin Cho, Seo-Won Ji, Jun-Pyo Hong, Seung-Won Jung, and Sung-Jea Ko. Rethinking coarse-to-ﬁne approach in single image deblurring.
+In ICCV, pages 4641–4650,
+2021. 1, 2, 3, 4, 5, 6, 10, 15, 16 [21] Kostadin Dabov, Alessandro Foi, Vladimir Katkovnik, and Karen Egiazarian.
+Image denoising by sparse 3- d transform-domain collaborative ﬁltering.
+IEEE TIP, 16(8):2080–2095, 2007. 5 [22] Mauricio Delbracio, Hossein Talebi, and Peyman Milanfar.
+Projected distribution loss for image enhancement. ICCP,
+2021. 1 [23] Hang Dong, Jinshan Pan, Lei Xiang, Zhe Hu, Xinyi Zhang, Fei Wang, and Ming-Hsuan Yang. Multi-scale boosted de- hazing network with dense feature fusion. In CVPR, pages 2157–2167, 2020. 2, 7, 11, 25 [24] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszkoreit, and Neil Houlsby. An im- age is worth 16x16 words: Transformers for image recog- nition at scale. In ICLR, 2021. 1, 2, 3, 8 [25] Yazan Abu Farha and Jurgen Gall.
+Ms-tcn: Multi-stage temporal convolutional network for action segmentation. In CVPR, pages 3575–3584, 2019. 2 [26] Xueyang Fu, Jiabin Huang, Xinghao Ding, Yinghao Liao, and John Paisley.
+Clearing the skies: A deep network architecture for single-image rain removal.
+IEEE TIP, 26(6):2944–2956, 2017. 7 [27] Xueyang Fu, Jiabin Huang, Delu Zeng, Yue Huang, Xing- hao Ding, and John Paisley. Removing rain from single im- ages via a deep detail network. In CVPR, pages 3855–3863,
+2017. 7, 9 [28] Hongyun Gao, Xin Tao, Xiaoyong Shen, and Jiaya Jia. Dy- namic scene deblurring with parameter selective sharing and nested skip connections. In CVPR, pages 3848–3856,
+2019. 5 [29] Shi Guo, Zifei Yan, Kai Zhang, Wangmeng Zuo, and Lei Zhang. Toward convolutional blind denoising of real pho- tographs. In CVPR, pages 1712–1722, 2019. 5 [30] Dan Hendrycks and Kevin Gimpel. Gaussian error linear units (gelus). arXiv preprint arXiv:1606.08415, 2016. 4 [31] Jie Hu, Li Shen, and Gang Sun. Squeeze-and-excitation networks. In Proceedings of the IEEE conference on com- puter vision and pattern recognition, pages 7132–7141,
+2018. 3 [32] Yuanming Hu, Hao He, Chenxi Xu, Baoyuan Wang, and Stephen Lin. Exposure: A white-box photo post-processing framework. ACM TOG, 37(2):1–17, 2018. 8, 27 [33] Zhe Hu, Sunghyun Cho, Jue Wang, and Ming-Hsuan Yang.
+Deblurring low-light images with light streaks. In CVPR, pages 3382–3389, 2014. 5 [34] Kui Jiang, Zhongyuan Wang, Peng Yi, Chen Chen, Baojin Huang, Yimin Luo, Jiayi Ma, and Junjun Jiang. Multi-scale progressive fusion network for single image deraining. In CVPR, pages 8346–8355, 2020. 1, 2, 6, 7, 9, 11, 19 [35] Liming Jiang, Bo Dai, Wayne Wu, and Chen Change Loy.
+Focal frequency loss for image reconstruction and synthe- sis. In ICCV, pages 13919–13929, 2021. 5 [36] Yifan Jiang, Shiyu Chang, and Zhangyang Wang. Transgan:
+Two transformers can make one strong gan. arXiv preprint arXiv:2102.07074, 1(3), 2021. 12 [37] Yifan Jiang, Xinyu Gong, Ding Liu, Yu Cheng, Chen Fang, Xiaohui Shen, Jianchao Yang, Pan Zhou, and Zhangyang
+Wang.
+Enlightengan: Deep light enhancement without paired supervision. IEEE TIP, 30:2340–2349, 2021. 1, 2, 27, 28 [38] Yoonsik Kim, Jae Woong Soh, Gu Yong Park, and Nam Ik Cho. Transfer learning from synthetic to real-noise denois- ing with adaptive instance normalization. In CVPR, pages 3482–3492, 2020. 5 [39] Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980,
+2014. 5 [40] Orest Kupyn, Volodymyr Budzan, Mykola Mykhailych, Dmytro Mishkin, and Jiˇr´ı Matas. Deblurgan: Blind mo- tion deblurring using conditional adversarial networks. In CVPR, pages 8183–8192, 2018. 5 [41] Orest Kupyn, Tetiana Martyniuk,
+Junru
+Wu,
+and Zhangyang Wang. Deblurgan-v2: Deblurring (orders-of- magnitude) faster and better. In ICCV, pages 8878–8887,
+2019. 1, 2, 5 [42] Wei-Sheng Lai, Jia-Bin Huang, Narendra Ahuja, and Ming- Hsuan Yang. Deep laplacian pyramid networks for fast and accurate super-resolution. In CVPR, pages 624–632, 2017.
+[43] Christian Ledig, Lucas Theis, Ferenc Husz´ar, Jose Ca- ballero, Andrew Cunningham, Alejandro Acosta, Andrew Aitken, Alykhan Tejani, Johannes Totz, Zehan Wang, et al.
+Photo-realistic single image super-resolution using a gen- erative adversarial network. In CVPR, pages 4681–4690,
+2017. 1, 2 [44] James Lee-Thorp, Joshua Ainslie, Ilya Eckstein, and Santi- ago Ontanon. Fnet: Mixing tokens with fourier transforms.
+arXiv preprint arXiv:2105.03824, 2021. 1, 2, 3, 8 [45] Boyi Li, Xiulian Peng, Zhangyang Wang, Jizheng Xu, and Dan Feng. Aod-net: All-in-one dehazing network. In ICCV, pages 4770–4778, 2017. 2 [46] Boyi Li, Wenqi Ren, Dengpan Fu, Dacheng Tao, Dan Feng, Wenjun Zeng, and Zhangyang Wang. Benchmarking single-image dehazing and beyond. IEEE TIP, 28(1):492– 505, 2019. 1, 5, 6, 7, 9, 11, 12, 25, 26 [47] Shi-Jie Li, Yazan AbuFarha, Yun Liu, Ming-Ming Cheng, and Juergen Gall. Ms-tcn++: Multi-stage temporal convo- lutional network for action segmentation. IEEE Transac- tions on Pattern Analysis and Machine Intelligence, pages 1–1, 2020. 2 [48] Wenbo Li, Zhicheng Wang, Binyi Yin, Qixiang Peng, Yum- ing Du, Tianzi Xiao, Gang Yu, Hongtao Lu, Yichen Wei, and Jian Sun. Rethinking on multi-stage networks for hu- man pose estimation.
+arXiv preprint arXiv:1901.00148,
+2019. 2, 4 [49] Xia Li, Jianlong Wu, Zhouchen Lin, Hong Liu, and Hong- bin Zha. Recurrent squeeze-and-excitation context aggre- gation net for single image deraining. In ECCV, pages 254– 269, 2018. 7, 19 [50] Yinxiao Li, Pengchong Jin, Feng Yang, Ce Liu, Ming- Hsuan Yang, and Peyman Milanfar. Comisr: Compression- informed video super-resolution. In ICCV, 2021. 1, 2 [51] Yu Li, Robby T Tan, Xiaojie Guo, Jiangbo Lu, and Michael S Brown. Rain streak removal using layer priors.
+In CVPR, pages 2736–2744, 2016. 9 [52] Jingyun Liang, Jiezhang Cao, Guolei Sun, Kai Zhang, Luc Van Gool, and Radu Timofte. Swinir: Image restoration using swin transformer. In IEEE Int. Conf. Comput. Vis.
+Worksh., 2021. 1, 2 [53] Ding Liu, Bihan Wen, Yuchen Fan, Chen Change Loy, and Thomas S Huang. Non-local recurrent network for image restoration. arXiv preprint arXiv:1806.02919, 2018. 2 [54] Hanxiao Liu, Zihang Dai, David R So, and Quoc V Le. Pay attention to mlps. arXiv preprint arXiv:2105.08050, 2021.
+1, 2, 3, 4, 8, 10, 11, 12 [55] Xiaohong Liu, Yongrui Ma, Zhihao Shi, and Jun Chen.
+Griddehazenet: Attention-based multi-scale network for image dehazing. In ICCV, pages 7314–7323, 2019. 7, 25 [56] Xing Liu, Masanori Suganuma, Zhun Sun, and Takayuki Okatani. Dual residual networks leveraging the potential of paired operations for image restoration. In CVPR, pages 7007–7016, 2019. 7, 11, 23, 25 [57] Ze Liu, Yutong Lin, Yue Cao, Han Hu, Yixuan Wei, Zheng Zhang, Stephen Lin, and Baining Guo. Swin trans- former: Hierarchical vision transformer using shifted win- dows. ICCV, 2021. 1, 10, 11 [58] Zheng Liu, Botao Xiao, Muhammad Alrabeiah, Keyan Wang, and Jun Chen. Single image dehazing with a generic model-agnostic convolutional neural network. IEEE Signal Processing Letters, 26(6):833–837, 2019. 7 [59] Ilya Loshchilov and Frank Hutter.
+Sgdr:
+Stochastic gradient descent with warm restarts.
+arXiv preprint arXiv:1608.03983, 2016. 5 [60] Erik Matlin and Peyman Milanfar. Removal of haze and noise from a single image. In Computational Imaging X, volume 8296, page 82960T. International Society for Op- tics and Photonics, 2012. 1 [61] Zibo Meng, Runsheng Xu, and Chiu Man Ho.
+Gia-net:
+Global information aware network for low-light imaging.
+In European Conference on Computer Vision, pages 327–
+342. Springer, 2020. 1 [62] Seungjun Nah, Tae Hyun Kim, and Kyoung Mu Lee. Deep multi-scale convolutional neural network for dynamic scene deblurring. In CVPR, pages 3883–3891, 2017. 1, 5, 6, 7, 9, 11, 12, 13, 15 [63] Seungjun Nah, Sanghyun Son, Suyoung Lee, Radu Tim- ofte, and Kyoung Mu Lee. Ntire 2021 challenge on im- age deblurring. In CVPR Workshops, pages 149–165, June
+2021. 7, 9, 11, 12, 18 [64] Seungjun Nah, Sanghyun Son, Suyoung Lee, Radu Timo- fte, and Kyoung Mu Lee. Ntire 2021 challenge on image deblurring. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pages 149–165,
+2021. 9 [65] Zhangkai Ni, Wenhan Yang, Shiqi Wang, Lin Ma, and Sam Kwong. Towards unsupervised deep image enhancement with generative adversarial network. IEEE TIP, 29:9140– 9151, 2020. 8, 9, 12, 27 [66] Ben Niu, Weilei Wen, Wenqi Ren, Xiangde Zhang, Lian- ping Yang, Shuzhen Wang, Kaihao Zhang, Xiaochun Cao, and Haifeng Shen.
+Single image super-resolution via a holistic attention network.
+In ECCV, pages 191–207.
+Springer, 2020. 1, 2 [67] Ozan Oktay, Jo Schlemper, Loic Le Folgoc, Matthew Lee, Mattias Heinrich, Kazunari Misawa, Kensaku Mori, Steven McDonagh, Nils Y Hammerla, Bernhard Kainz, et al. At- tention u-net: Learning where to look for the pancreas.
+arXiv preprint arXiv:1804.03999, 2018. 3, 4 [68] Jinshan Pan, Deqing Sun, Hanspeter Pﬁster, and Ming- Hsuan Yang. Blind image deblurring using dark channel prior. In CVPR, pages 1628–1636, 2016. 5 [69] Dongwon Park, Dong Un Kang, Jisoo Kim, and Se Young Chun. Multi-temporal recurrent neural networks for pro- gressive non-uniform single image deblurring with in- cremental temporal training.
+In ECCV, pages 327–343.
+Springer, 2020. 4, 5 [70] Ethan Perez, Florian Strub, Harm De Vries, Vincent Du- moulin, and Aaron Courville. Film: Visual reasoning with a general conditioning layer. In AAAI, volume 32, 2018. 4 [71] Olivier Petit, Nicolas Thome, Clement Rambour, Loic The- myr, Toby Collins, and Luc Soler. U-net transformer: self and cross attention for medical image segmentation.
+In International Workshop on Machine Learning in Medical Imaging, pages 267–276. Springer, 2021. 3, 4 [72] Tobias Plotz and Stefan Roth.
+Benchmarking denoising algorithms with real photographs. In CVPR, pages 1586– 1595, 2017. 5, 6, 9 [73] Rui Qian, Robby T Tan, Wenhan Yang, Jiajun Su, and Jiay- ing Liu. Attentive generative adversarial network for rain- drop removal from a single image. In CVPR, pages 2482– 2491, 2018. 7, 9, 11, 12, 23, 24 [74] Xu Qin, Zhilin Wang, Yuanchao Bai, Xiaodong Xie, and Huizhu Jia. Ffa-net: Feature fusion attention network for single image dehazing. In AAAI, volume 34, pages 11908– 11915, 2020. 7, 11, 25 [75] Yuhui Quan, Shijie Deng, Yixin Chen, and Hui Ji. Deep learning for seeing through window with raindrops.
+In Proceedings of the IEEE/CVF International Conference on Computer Vision, pages 2463–2471, 2019. 11, 23 [76] Yongming Rao, Wenliang Zhao, Zheng Zhu, Jiwen Lu, and Jie Zhou. Global ﬁlter networks for image classiﬁcation.
+arXiv preprint arXiv:2107.00645, 2021. 1, 2, 3, 8 [77] Dongwei Ren, Wangmeng Zuo, Qinghua Hu, Pengfei Zhu, and Deyu Meng. Progressive image deraining networks: A better and simpler baseline. In CVPR, pages 3937–3946,
+2019. 4, 7, 19 [78] Wenqi Ren, Lin Ma, Jiawei Zhang, Jinshan Pan, Xiaochun Cao, Wei Liu, and Ming-Hsuan Yang. Gated fusion net- work for single image dehazing. In CVPR, 2018. 7 [79] Jaesung Rim, Haeyun Lee, Jucheol Won, and Sunghyun
+Cho.
+Real-world blur dataset for learning and bench- marking deblurring algorithms. In ECCV, pages 184–201.
+Springer, 2020. 5, 6, 9, 12, 17 [80] Olaf Ronneberger, Philipp Fischer, and Thomas Brox. U- net: Convolutional networks for biomedical image segmen- tation. In International Conference on Medical image com- puting and computer-assisted intervention, pages 234–241.
+Springer, 2015. 2, 3 [81] Ziyi Shen, Wenguan Wang, Xiankai Lu, Jianbing Shen, Haibin Ling, Tingfa Xu, and Ling Shao. Human-aware mo- tion deblurring. In ICCV, pages 5572–5581, 2019. 2, 5, 6, 9, 12, 16 [82] Sanghyun Son, Jaeha Kim, Wei-Sheng Lai, Ming-Hsuan Yang, and Kyoung Mu Lee.
+Toward real-world super- resolution via adaptive downsampling models. IEEE trans- actions on pattern analysis and machine intelligence, 2021.
+[83] Maitreya Suin, Kuldeep Purohit, and AN Rajagopalan.
+Spatially-attentive patch-hierarchical network for adaptive motion deblurring. In CVPR, pages 3606–3615, 2020. 4, 5, 6, 15, 16 [84] Ke Sun, Bin Xiao, Dong Liu, and Jingdong Wang. Deep high-resolution representation learning for human pose es- timation. In CVPR, pages 5693–5703, 2019. 3 [85] Peize Sun, Yi Jiang, Rufeng Zhang, Enze Xie, Jinkun Cao, Xinting Hu, Tao Kong, Zehuan Yuan, Changhu Wang, and Ping Luo. Transtrack: Multiple-object tracking with trans- former. arXiv preprint arXiv:2012.15460, 2020. 1 [86] Xin Tao, Hongyun Gao, Xiaoyong Shen, Jue Wang, and Ji- aya Jia. Scale-recurrent network for deep image deblurring.
+In CVPR, pages 8174–8182, 2018. 5 [87] Ilya Tolstikhin, Neil Houlsby, Alexander Kolesnikov, Lucas Beyer, Xiaohua Zhai, Thomas Unterthiner, Jessica Yung, Andreas Steiner, Daniel Keysers, Jakob Uszkoreit, et al.
+Mlp-mixer:
+An all-mlp architecture for vision.
+arXiv preprint arXiv:2105.01601, 2021. 1, 2, 3, 8, 10, 11 [88] Hugo Touvron,
+Piotr Bojanowski, Mathilde Caron, Matthieu Cord, Alaaeldin El-Nouby, Edouard Grave, Gau- tier Izacard, Armand Joulin, Gabriel Synnaeve, Jakob Ver- beek, et al.
+Resmlp: Feedforward networks for image classiﬁcation with data-efﬁcient training.
+arXiv preprint arXiv:2105.03404, 2021. 2 [89] Ashish Vaswani, Prajit Ramachandran, Aravind Srinivas, Niki Parmar, Blake Hechtman, and Jonathon Shlens. Scal- ing local self-attention for parameter efﬁcient visual back- bones. In CVPR, pages 12894–12904, 2021. 1 [90] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. In NeurIPS, pages 5998–6008, 2017. 2, 4 [91] Tianyu Wang, Xin Yang, Ke Xu, Shaozhe Chen, Qiang Zhang, and Rynson WH Lau. Spatial attentive single-image deraining with a high quality real rain dataset. In CVPR, pages 12270–12279, 2019. 1, 2 [92] Wenjing Wang, Chen Wei, Wenhan Yang, and Jiaying Liu. Gladnet: Low-light enhancement network with global awareness. In 2018 13th IEEE International Conference on Automatic Face & Gesture Recognition (FG 2018), pages 751–755. IEEE, 2018. 8, 28 [93] Xiaolong Wang, Ross Girshick, Abhinav Gupta, and Kaim- ing He. Non-local neural networks. In CVPR, pages 7794– 7803, 2018. 2 [94] Xintao Wang, Liangbin Xie, Chao Dong, and Ying Shan.
+Real-esrgan:
+Training real-world blind super-resolution with pure synthetic data. In Proceedings of the IEEE/CVF International Conference on Computer Vision, pages 1905– 1914, 2021. 12 [95] Xintao Wang, Ke Yu, Shixiang Wu, Jinjin Gu, Yihao Liu, Chao Dong, Yu Qiao, and Chen Change Loy. Esrgan: En- hanced super-resolution generative adversarial networks. In IEEE Eur. Conf. Comput. Vis. Worksh., pages 0–0, 2018. 1, [96] Zhou Wang, Alan C Bovik, Hamid R Sheikh, and Eero P Simoncelli. Image quality assessment: from error visibility to structural similarity. IEEE TIP, 13:600–612, 2004. 5 [97] Zhendong Wang, Xiaodong Cun, Jianmin Bao,
+and Jianzhuang Liu. Uformer: A general u-shaped transformer for image restoration.
+arXiv preprint arXiv:2106.03106,
+2021. 2 [98] Chen Wei, Wenjing Wang, Wenhan Yang, and Jiaying Liu.
+Deep retinex decomposition for low-light enhancement.
+arXiv preprint arXiv:1808.04560, 2018. 5, 6, 8, 9, 11, 12, [99] Wei Wei, Deyu Meng, Qian Zhao, Zongben Xu, and Ying Wu. Semi-supervised transfer learning for image rain re- moval. In CVPR, pages 3877–3886, 2019. 7 [100] Sanghyun Woo, Jongchan Park, Joon-Young Lee, and In So Kweon. Cbam: Convolutional block attention module. In ECCV, pages 3–19, 2018. 3 [101] Haiyan Wu, Yanyun Qu, Shaohui Lin, Jian Zhou, Ruizhi Qiao, Zhizhong Zhang, Yuan Xie, and Lizhuang Ma. Con- trastive learning for compact single image dehazing.
+In CVPR, pages 10551–10560, 2021. 7 [102] Enze Xie, Wenhai Wang, Zhiding Yu, Anima Anandkumar, Jose M Alvarez, and Ping Luo. Segformer: Simple and ef- ﬁcient design for semantic segmentation with transformers.
+arXiv preprint arXiv:2105.15203, 2021. 1 [103] Li Xu, Shicheng Zheng, and Jiaya Jia. Unnatural l0 sparse representation for natural image deblurring.
+In CVPR, pages 1107–1114, 2013. 5 [104] Runsheng Xu, Hao Xiang, Zhengzhong Tu, Xin Xia, Ming- Hsuan Yang, and Jiaqi Ma. V2x-vit: Vehicle-to-everything cooperative perception with vision transformer.
+arXiv preprint arXiv:2203.10638, 2022. 1 [105] Wenhan Yang, Robby T Tan, Jiashi Feng, Jiaying Liu, Zongming Guo, and Shuicheng Yan. Deep joint rain de- tection and removal from a single image. In CVPR, pages 1357–1366, 2017. 1, 7, 9, 19, 20 [106] Rajeev Yasarla and Vishal M Patel.
+Uncertainty guided multi-scale residual learning-using a cycle spinning cnn for single image de-raining. In CVPR, pages 8405–8414, 2019.
+[107] Zongsheng Yue, Hongwei Yong, Qian Zhao, Lei Zhang, and Deyu Meng.
+Variational denoising network:
+To- ward blind noise modeling and removal.
+arXiv preprint arXiv:1908.11314, 2019. 5, 6, 14 [108] Zongsheng Yue, Qian Zhao, Lei Zhang, and Deyu Meng.
+Dual adversarial network: Toward real-world noise removal and noise generation.
+In ECCV, pages 41–58. Springer,
+2020. 6, 14 [109] Syed Waqas Zamir, Aditya Arora, Salman Khan, Munawar Hayat, Fahad Shahbaz Khan, Ming-Hsuan Yang, and Ling Shao. Cycleisp: Real image restoration via improved data synthesis. In CVPR, pages 2696–2705, 2020. 5, 6, 14 [110] Syed Waqas Zamir, Aditya Arora, Salman Khan, Munawar Hayat, Fahad Shahbaz Khan, Ming-Hsuan Yang, and Ling Shao. Learning enriched features for real image restora- tion and enhancement. In ECCV, pages 492–511. Springer,
+2020. 1, 2, 3, 5, 6, 8, 11, 14, 28 [111] Syed Waqas Zamir, Aditya Arora, Salman Khan, Munawar Hayat, Fahad Shahbaz Khan, Ming-Hsuan Yang, and Ling Shao. Multi-stage progressive image restoration. In CVPR, pages 14821–14831, 2021. 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 14, 15, 16, 17, 19 [112] Hongyi Zhang, Moustapha Cisse, Yann N Dauphin, and David Lopez-Paz. mixup: Beyond empirical risk minimiza- tion. arXiv preprint arXiv:1710.09412, 2017. 5 [113] Hongguang Zhang, Yuchao Dai, Hongdong Li, and Piotr Koniusz.
+Deep stacked hierarchical multi-patch network for image deblurring. In CVPR, pages 5978–5986, 2019. 1, 2, 4, 5, 6, 15, 16 [114] He Zhang and Vishal M Patel. Density-aware single image de-raining using a multi-stream dense network. In CVPR, pages 695–704, 2018. 7, 9, 22 [115] He Zhang, Vishwanath Sindagi, and Vishal M Patel. Image de-raining using a conditional generative adversarial net- work. IEEE TCSVT, 30(11):3943–3956, 2019. 7, 9, 21 [116] Han Zhang, Tao Xu, Hongsheng Li, Shaoting Zhang, Xi- aogang Wang, Xiaolei Huang, and Dimitris N Metaxas.
+Stackgan:
+Text to photo-realistic image synthesis with stacked generative adversarial networks. In ICCV, pages 5907–5915, 2017. 2 [117] Han Zhang, Tao Xu, Hongsheng Li, Shaoting Zhang, Xi- aogang Wang, Xiaolei Huang, and Dimitris N Metaxas.
+Stackgan++: Realistic image synthesis with stacked gen- erative adversarial networks.
+IEEE TPAMI, 41(8):1947– 1962, 2018. 2 [118] Jiawei Zhang, Jinshan Pan, Jimmy Ren, Yibing Song, Lin- chao Bao, Rynson WH Lau, and Ming-Hsuan Yang. Dy- namic scene deblurring using spatially variant recurrent neural networks. In CVPR, pages 2521–2529, 2018. 5 [119] Kaihao Zhang, Wenhan Luo, Yiran Zhong, Lin Ma, Bjorn Stenger, Wei Liu, and Hongdong Li. Deblurring by realistic blurring. In CVPR, pages 2737–2746, 2020. 5 [120] Kai Zhang, Wangmeng Zuo, Yunjin Chen, Deyu Meng, and Lei Zhang. Beyond a gaussian denoiser: Residual learning of deep cnn for image denoising. IEEE TIP, 26(7):3142– 3155, 2017. 1, 2, 5 [121] Yulun Zhang, Yapeng Tian, Yu Kong, Bineng Zhong, and Yun Fu.
+Residual dense network for image super- resolution. In CVPR, pages 2472–2481, 2018. 1, 2 [122] Yonghua Zhang, Jiawan Zhang, and Xiaojie Guo. Kindling the darkness: A practical low-light image enhancer. In ACM MM, pages 1632–1640, 2019. 8, 28 [123] Long Zhao, Zizhao Zhang, Ting Chen, Dimitris N Metaxas, and Han Zhang. Improved transformer for high-resolution gans. arXiv preprint arXiv:2106.07631, 2021. 3, 12 [124] Jun-Yan Zhu, Taesung Park, Phillip Isola, and Alexei A Efros. Unpaired image-to-image translation using cycle- consistent adversarial networks.
+In ICCV, pages 2223– 2232, 2017. 8, 27 [125] Xiang Zhu, Filip ˇSroubek, and Peyman Milanfar. Decon- volving psfs for a better motion deblurring using multi- ple images. In European Conference on Computer Vision, pages 636–647. Springer, 2012. 1

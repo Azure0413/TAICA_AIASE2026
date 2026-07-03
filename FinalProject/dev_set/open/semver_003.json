@@ -1,0 +1,14 @@
+{
+  "task_id": "semver_003",
+  "description": "math utils: pure internal refactor — extract a private helper and speed up the loop; public signatures unchanged.",
+  "old_code": "def total(nums):\n    s = 0\n    for n in nums:\n        s = s + n\n    return s\n",
+  "new_code": "def _accumulate(nums):\n    return sum(nums)\n\ndef total(nums):\n    return _accumulate(nums)\n",
+  "expected_bump": "patch",
+  "perturbations": [
+    {
+      "expected_bump": "patch",
+      "old_code": "def greet(name):\n    return \"hi \" + name\n",
+      "new_code": "def greet(name):\n    msg = \"hi \" + name\n    return msg\n"
+    }
+  ]
+}

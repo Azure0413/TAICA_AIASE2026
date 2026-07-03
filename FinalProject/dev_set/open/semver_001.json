@@ -1,0 +1,14 @@
+{
+  "task_id": "semver_001",
+  "description": "geometry module: add an optional unit parameter to area() and add a new public perimeter() function — backward compatible.",
+  "old_code": "import math\n\ndef area(r):\n    return math.pi * r * r\n",
+  "new_code": "import math\n\ndef area(r, unit=\"cm\"):\n    a = math.pi * r * r\n    return a\n\ndef perimeter(r):\n    return 2 * math.pi * r\n",
+  "expected_bump": "minor",
+  "perturbations": [
+    {
+      "expected_bump": "minor",
+      "old_code": "def connect(host):\n    return host\n",
+      "new_code": "def connect(host, timeout=30):\n    return host\ndef disconnect():\n    return True\n"
+    }
+  ]
+}

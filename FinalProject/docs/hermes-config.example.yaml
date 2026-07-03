@@ -1,0 +1,31 @@
+# 把這份內容貼到 ~/.hermes/config.yaml(或合併進你既有的設定)。
+# LiteLLM token 請放在 ~/.hermes/.env(見 hermes-env.example),不要寫在這裡。
+#
+# 注意:provider id、key_env 名稱為課程固定值,不可更動。
+# ⚠️  LiteLLM Gateway 的 base_url 與 token 皆屬課程機密,不可 commit 進任何 repo。
+#     請把真實 URL 放進你本機(未被追蹤)的 ~/.hermes/config.yaml,token 放 ~/.hermes/.env。
+#     下方刻意以 placeholder 呈現;請勿把課程實際的 gateway URL 上傳。
+
+providers:
+  - id: aiase
+    type: openai
+    base_url: https://<COURSE_LITELLM_GATEWAY_HOST>/v1   # ← 換成課程提供的 URL(勿 commit)
+    key_env: AIASE_LITELLM_KEY
+
+# 開發期可用的模型(評分當天會由課程指定一個,實際模型保密直到評分)。
+models:
+  - id: gemma4
+    provider: aiase
+    model: gemma4
+  - id: gemini-2.5-flash
+    provider: aiase
+    model: gemini-2.5-flash
+
+# 預設模型 — 開發期建議先 gemma4(免費迭代),穩了再切 gemini-2.5-flash 驗跨模型。
+default_model: gemma4
+
+# 讓 Hermes 直接掃描你 repo 內的 skills 資料夾,不必複製到 ~/.hermes/skills/。
+# 請改成你本機 repo 的 absolute path。
+skills:
+  external_dirs:
+    - /ABSOLUTE/PATH/TO/final-project-<github_id>/skills

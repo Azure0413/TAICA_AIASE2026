@@ -1,0 +1,12 @@
+# Python >= 3.10 required (developed and tested with 3.13.5)
+# 核心（capture/store/retrieve/bm25）只用 stdlib，無需任何外部套件。
+# 下方為「跑測試」與「任務二 hybrid」需要的：
+pytest>=8.0
+
+# 任務二 A：hybrid retrieval — 本地 sentence-transformers，CPU 推論即可
+# 模型權重在首次執行從 HuggingFace 下載並快取至 ~/.cache/huggingface/
+# 之後完全離線運作（不打雲端 API）
+sentence-transformers>=2.7.0
+
+# 任務二 A 替代後端：若 PI_EMBED_BACKEND=ollama，要 requests 打 LAN 上的 Ollama
+requests>=2.31

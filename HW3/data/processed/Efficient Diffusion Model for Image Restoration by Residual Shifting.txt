@@ -1,0 +1,817 @@
+1 Efficient Diffusion Model for Image Restoration by Residual Shifting Zongsheng Yue, Jianyi Wang, Chen Change Loy, Senior Member, IEEE
+Abstract—While diffusion-based image restoration (IR) meth- ods have achieved remarkable success, they are still limited by the low inference speed attributed to the necessity of executing hundreds or even thousands of sampling steps. Existing accelera- tion sampling techniques, though seeking to expedite the process, inevitably sacrifice performance to some extent, resulting in over- blurry restored outcomes. To address this issue, this study pro- poses a novel and efficient diffusion model for IR that significantly reduces the required number of diffusion steps. Our method avoids the need for post-acceleration during inference, thereby avoiding the associated performance deterioration. Specifically, our proposed method establishes a Markov chain that facilitates the transitions between the high-quality and low-quality images by shifting their residuals, substantially improving the transition efficiency. A carefully formulated noise schedule is devised to flexibly control the shifting speed and the noise strength during the diffusion process. Extensive experimental evaluations demonstrate that the proposed method achieves superior or comparable performance to current state-of-the-art methods on four classical IR tasks, namely image super-resolution, image inpainting, blind face restoration, and image deblurring, even only with four sampling steps. Our code and model are publicly available at https://github.com/zsyOAOA/ResShift.
+Index Terms—Markov chain, noise schedule, image super- resolution, image inpainting, face restoration.
+I. INTRODUCTION
+I Mage restoration (IR) is a critical challenge in the field of low-level vision, with the goal of recovering a high- quality (HQ) image from its corresponding low-quality (LQ) variant. This challenge can be further divided into different sub-tasks upon its degradation model, including image super- resolution [1], [2], image deblurring [3], [4], and image inpainting [5], [6], among others [7], [8]. Particularly, the degradation models encountered in practical scenarios, such as those in real-world super-resolution, often exhibit significant complexity, rendering the IR problem severely ill-posed and challenging to address.
+The diffusion model [9] has revolutionized the traditional paradigm of image generation based on Generative Adversarial Networks (GANs) [10], [11], further advancing the field of image synthesis [12], [13]. This approach leverages a hidden Markov chain to progressively corrupt an image into white Gaussian noise through a forward diffusion process, and subsequently employs a deep neural network to approximate the reverse process for image reconstruction. Attributed to its powerful generative capability, the diffusion model has
+Z.
+Yue,
+J.
+Wang,
+and
+C.
+C.
+Loy
+are
+with S-Lab, Nanyang Technological University (NTU), Singapore (E-mail: zsyue@gmail.com, {jianyi001,ccloy}@ntu.edu.sg).
+C. C. Loy is the corresponding author.
+shown considerable potential in addressing various IR tasks, including image denoising [14], [15], deblurring [4], [16], inpainting [17]–[20], colorization [21]–[23]. The exploration of diffusion models’ capabilities in IR still remains an active and promising area of research.
+In this study, we categorize recent diffusion-based IR meth- ods into two main approaches. The first approach [22], [24]– [27] directly incorporates the LQ image into the input of a current diffusion model, such as DDPM [12], as a condition, and then retrain this model specifically for the IR task. Once trained, this model can generate the desirable HQ image from Gaussian noise and the observed LQ image through the reverse sampling process. The second approach, as explored in [28]– [35], adopts a pre-trained unconditional diffusion model as a prior to address the IR problem. This method modifies the reverse sampling procedure to align the generated outputs with the given LQ observations by incorporating the degradation model at each iteration. However, both strategies are limited by the inherent Markov chain structure of DDPM, which often leads to inefficiencies during inference, requiring hundreds or even thousands of sampling steps. While recent advance- ments [36]–[38] have introduced acceleration techniques to reduce sampling steps, these methods inevitably result in a significant performance drop, as evidenced by the overly smooth results shown in Fig. 1(i)-(k). Thus, there is a need to devise a new diffusion model specifically designed for IR that achieves an optimal trade-off between efficiency and performance, without sacrificing one for the other.
+In the domain of image generation, diffusion models pro- gressively convert the observed data into a pre-determined prior distribution, often a standard Gaussian distribution, through a Markov chain over numerous steps. The forward diffusion process constructs this Markov chain, while the reverse process involves training a deep neural network to approximate the inverse trajectory of the Markov chain. The trained neural network can generate images randomly by sampling from the reverse Markov chain, initiating at the Gaussian distribution. Although the Gaussian distribution is well-suited for image generation, its optimality is questioned for IR, where LQ images are available as extra information. In this paper, we argue that a reasonable diffusion model for IR should start from a prior distribution centered around the LQ image, enabling an iterative recovery of the HQ image from its LQ counterpart instead of Gaussian white noise. This approach not only aligns more closely with the characteristics of IR but also holds the potential to reduce the number of diffusion steps for sampling, thereby improving inference efficiency.
+In light of the preceding motivation, we introduce an (a) LQ Image (g) SwinIR (b) Ours-4 (c) RealESRGAN (h) BSRGAN (i) StableSR-4 (d) StableSR-50 (j) LDM-4 (e) LDM-50 (f) CCSR-50 (k) CCSR-4
+Fig. 1.
+Qualitative comparisons on one typical real-world example of the proposed method and recent state-of-the-arts, including RealESRGAN [39], BSRGAN [40], SwinIR [41], LDM [25], StableSR [30], and CCSR [42]. As for the diffusion-based approaches and our proposed method, we annotate the number of sampling steps with the format of “Method-A” for more intuitive visualization, where “A” denotes the number of sampling steps.
+efficient diffusion model characterized by a shorter Markov chain transferring between the HQ and LQ images. The Markov chain’s initial state converges towards an approximate distribution of the HQ image, while the final state approxi- mates the LQ image distribution. This is achieved through the design of a transition kernel that incrementally shifts residual information between the HQ and LQ image pair. Our method exhibits superior efficiency beyond existing diffusion-based IR methods, due to its capacity to rapidly transfer residual information across a limited number of steps. Moreover, this design also allows for an analytical and concise expression of the evidence lower bound (ELBO), thereby simplifying the formulation of the optimization objective for training. Beyond the traditional ELBO, we empirically find that introducing a perceptual regularizer can further reduce the diffusion steps during training, and thus improve the inference efficiency.
+Building upon the constructed diffusion kernel, we develop a highly flexible noise schedule that controls the rate of residual transfer and the intensity of the added noise at each step.
+This schedule provides a mechanism for balancing the fidelity and realism of the recovered images by tuning its hyper- parameters.
+In summary, the main contributions of this work are as follows:
+• We propose an efficient diffusion model specifically for IR. It builds up a short Markov chain between the HQ/LQ images, rendering a fast reverse sampling trajectory during inference. Extensive experiments show that our approach requires only four sampling steps to achieve appealing results, outperforming or at least being comparable to cur- rent state-of-the-art methods. A preview of the comparison results of the proposed method to recent approaches is shown in Fig. 1.
+• A highly flexible noise schedule is designed for the proposed diffusion model, capable of controlling the tran- sition properties more precisely, including the shifting speed and the noise level. Through tuning the hyper- parameters, our method offers a more graceful solution to the widely acknowledged perception-distortion trade- off in IR.
+• Based on the traditional diffusion Unet, we propose to substitute its self-attention layers with Swin Transformer blocks to enhance its capability in handling images with varying resolutions.
+• The proposed method is a general diffusion-based frame- work for IR and capable of handling various IR tasks.
+This study has thoroughly substantiated its effectiveness and superiority on four typical and challenging IR tasks, namely image super-resolution, image inpainting, blind face restoration, and image deblurring.
+In summary, our work formulates an efficient diffusion model tailored for IR, overcoming the limitation of prevailing approaches on inference efficiency. A preliminary version of this work has been published in NeurIPS 2023 [43], focusing only on the task of image super-resolution. This study makes substantial improvements in both model design and empirical evaluation across diverse IR tasks compared with the confer- ence version. Concretely, we incorporate the perceptual loss into the model optimization and substitute the self-attention layer with shifted window-based self-attention presented in Swin Transformer [44] in the network architecture. The former modification can further reduce the diffusion steps from 15 to 4, and the latter endows our model with graceful adaptability to handle arbitrary resolutions during inference.
+The remainder of the manuscript is organized as follows:
+Section II introduces the related work. Section III presents our designed diffusion model for IR. In Section IV and Section V, extensive experiments are conducted to evaluate the performance of our proposed method on the task of image super-resolution and image inpainting, respectively. Section VI finally concludes the paper.
+II. RELATED WORK In this section, we briefly review the literature on im- age restoration, traversing from conventional non-diffusion methodologies to recent diffusion-based approaches.
+A. Conventional Image Restoration Approaches Most of the conventional IR methods can be cast into the Maximum a Posteriori (MAP) framework, a Bayesian paradigm encompassing a likelihood (loss) term and a prior (regularization) term. The likelihood reflects the underlying noise distribution of the LQ image. The commonly used L2 or L1 loss indeed corresponds to a Gaussian or Laplacian assumption on image noise. To more accurately depict the noise distribution, some robust alternatives were introduced, such as Poissonian-Gaussian [45], MoG [46], MoEP [47], Dirichlet MoG [48], [49] and so on. Simultaneously, there has been an increased focus on employing image priors to address the inherent ill-posedness of IR over recent decades.
+Typical image priors encompass total variation [50], wavelet coring [51], non-local similarity [1], [52], sparsity [53], [54], low-rankness [7], [55], dark channel [56], [57], among others.
+These conventional methods are mainly limited by the model capacity and the subjectivity inherited from the manually designed assumptions on image noise and prior.
+In recent years, the landscape of IR has been dominated by deep learning (DL)-based methodologies. The seminal works [2], [8], [58] proposed to solve the IR problem us- ing a convolution neural network, outperforming traditional model-based methods on the tasks of image denoising, super- resolution, and deblurring. Then, many studies [6], [59]– [67] have emerged, mainly concentrating on designing more delicate network architectures to further improve the restora- tion performance. Besides, there have been some discernible investigations that seek to combine current DL tools and classical IR modeling ideas. Notable works include the plug- and play or unfolding paradigm [68]–[70], learnable image priors [71]–[74], and the loss-oriented methods [75]–[77]. The infusion of deep neural networks, owing to their large model capacity, has substantively extended the frontiers of IR tasks.
+B. Diffusion-based Image Restoration Approaches Inspired by principles from non-equilibrium statistical physics, Sohl-Dickstein et al. [9] proposed the diffusion model to fit complex distributions. Subsequent advancements by Ho et al. [12] and Song et al. [21] further improve its theoret- ical foundation by integrating denoising score matching and stochastic differential equation, thereby achieving impressive success in image generation [25], [78]. Owing to its powerful generative capability, diffusion models have also found suc- cessful applications in the field of IR. Next, we provide a comprehensive overview of recent developments in diffusion- based IR methods.
+The most straightforward solution to solve the IR problem using diffusion models is to introduce the LQ image as an addition condition in each timestep. Pioneering this approach, Saharia et al. [24] have successfully trained a diffusion model for image super-resolution. Subsequent studies [4], [22], [27] further expanded upon this approach, exploring its applica- bility in image deblurring, colorization, and denoising. To circumvent the resource-intensive process of training from scratch, an alternative strategy involves harnessing a pre- trained diffusion model to facilitate IR tasks. Numerous inves- tigations, such as [16], [18], [19], [28], [29], [33], [34], [79], reformulated the reverse sampling procedure of a pre-trained diffusion model into an optimization problem by incorporating the degradation model, enabling solving the IR problem in a zero-shot manner. Most of these methods, however, cannot deal with the blind IR problem, as they rely on a pre-defined degradation model. In contrast, some other works [30], [31], [80]–[82] directly introduced a trainable module that takes the LQ image as input. This module modulates the feature maps of the pre-trained diffusion model, steering it toward the direction of generating a desirable HQ image. Such a paradigm eliminates the reliance on a degradation model in the test phase, rendering it capable of handling the blind IR tasks.
+The methodologies mentioned above are grounded in the foundational diffusion model initially crafted for image gen- eration, necessitating a large number of sampling steps. This inefficiency presents a constraint on their application in real scenarios. The primary goal of our investigation is to devise a new diffusion model customized for IR, which facilitates a swift transition between the LQ/HQ image pair, thereby enhancing efficiency during inference.
+III. METHODOLOGY In this section, we present our proposed diffusion model tailored for IR. For ease of presentation, the LQ image and the corresponding HQ image are denoted as y0 and x0, respectively. Notably, we further assume y0 and x0 have identical spatial resolution, which can be easily achieved by pre-upsampling the LQ image y0 using nearest neighbor interpolation if necessary.
+A. Model Design The iterative sampling paradigm of diffusion models has proven highly effective in generating intricate and vivid image details, inspiring us to design an iterative approach to address the IR problem as well. Our proposed method builds up a Markov chain to facilitate a transition from the HQ image to its LQ counterpart as shown in Fig. 2. In this way, the restoration of the desirable HQ image can be achieved by sampling along the reverse trajectory of this Markov chain that starts at the given LQ image. Next, we will detail how to construct such a Markov chain specifically for IR.
+Forward Process. Let’s denote the residual between the LQ image and its corresponding HQ counterpart as e0, i.e., e0 = y0 −x0. Our core idea is to construct a transition from x0 to y0 by gradually shifting their residual e0 through a Markov chain with length T. Before that, we first introduce a shifting sequence {ηt}T t=1, which increases monotonically with respect to timestep t and adheres to the condition of η1 →0 and ηT →1. Then, the transition distribution is formulated based on this shifting sequence as follows:
+q(xt|xt−1, y0) = N(xt; xt−1 + αte0, κ2αtI), t = 1, · · · , T,
+(1) where α1 = η1 and αt = ηt −ηt−1 for t > 1, κ is a hyper- parameter controlling the noise variance, I is the identity matrix. Notably, we show that the marginal distribution at any timestep t is analytically integrable, namely q(xt|x0, y0) = N(xt; x0 + ηte0, κ2ηtI), t = 1, · · · , T. (2)
+𝑧𝑧0
+𝑧𝑧1
+𝑧𝑧2 𝑧𝑧𝑇𝑇−1
+𝑧𝑧𝑇𝑇
+VQGAN Optional Residual
+VQGAN Optional HQ Image LQ Image
+⊗𝜂𝜂1
+⊗
+⊗
+⊗
+⊗
+𝜂𝜂2 𝜂𝜂𝑇𝑇−1
+𝜂𝜂𝑇𝑇 Forward Reverse
+⋯
+Fig. 2. Overview of the proposed method. Our method builds up a Markov chain between the HQ/LQ image pair by shifting their residuals. To alleviate the computational burden of this transition, it can be optionally moved to the latent space of VQGAN [83].
+Algorithm 1 Training Input: Degradation model D(·), high-quality dataset T 1: repeat
+2:
+x0 ∼T , y0 = D(x0)
+3:
+t ∼Uniform ({1, · · · , T})
+4:
+xt ∼q(xt|x0, y0)
+5:
+Take gradient descent step on ∇Lθ(xt, y0, t) 6: until converged The design of the transition distribution presented in Eq. (1) is guided by two primary principles. The first principle concerns the standard deviation, i.e., κ√αt, which aims to facilitate a smooth transition between xt and xt−1. This is achieved by bounding the expected distance between xt and xt−1 with √αt, given that the image data falls within the range of [0, 1]. Mathematically, this is expressed as:
+max[(x0 +ηte0)−(x0 +ηt−1e0)] = max[αte0] 1 else ϵ = 0
+4:
+µ = ηt−1 ηt xt + αt ηt fθ(xt, y, t)
+5:
+xt−1 = µ + κ
+q ηt−1αt
+ηt
+ϵ 6: end for 7: return x0 prevalent literature of diffusion model [9], [12], [21], we adopt the following Gaussian assumption:
+pθ(xt−1|xt, y0) = N (xt−1; µθ(xt, y0, t), Σθ(xt, y0, t)) .
+(5) The optimization for θ is achieved by minimizing the follow- ing negative ELBO, i.e.,
+X
+t DKL [q(xt−1|xt, x0, y0)∥pθ(xt−1|xt, y0)] ,
+(6) where DKL[·∥·] denotes the Kullback-Leibler (KL) divergence.
+More mathematical details can be found in [9] or [12].
+By combining Eq. (1) and Eq. (2), the target distribution q(xt−1|xt, x0, y0) in Eq. (6) can be rendered tractable and expressed in an explicit form given below:
+q(xt−1|xt, x0, y0) = N
+
+xt−1
+
+ηt−1
+ηt xt + αt
+ηt x0, κ2 ηt−1
+ηt
+αtI
+
+.
+(7) The detailed calculation of this derivation can be found in Appendix A. Considering that the variance parameter is inde- pendent of xt and y0, we thus set it to be the true variance,
+i.e., Σθ(xt, y0, t) = κ2 ηt−1
+ηt
+αtI.
+(8) The mean parameter µθ(xt, y0, t) is reparameterized as:
+µθ(xt, y0, t) = ηt−1
+ηt xt + αt
+ηt fθ(xt, y0, t),
+(9) where fθ(·) is a deep neural network with parameter θ, aiming to predict x0. We explored different parameterization forms on µθ and found that Eq. (9) exhibits superior stability and performance.
+(a) HQ Image (f) Latent Diffusion Model (T=1000) (e) ResShift (κ=40, p=0.8, T=1000) Forward Process
+(h) (c) ResShift (κ=1.0, p=0.3, T=15) (d) ResShift (κ=2.0, p=0.3, T=15)
+(g) (b) Zoomed LQ
+Fig. 3. Illustration of the proposed noise schedule. (a) HQ image. (b) Zoomed LQ image. (c)-(d) Diffused images of the proposed noise schedule in timesteps of 1, 3, 5, 7, 9, 12, and 15 under different values of κ by fixing p = 0.3 and T = 15. (e)-(f) Diffused images of our method with a specified configuration of κ = 40, p = 0.8, T = 1000 and LDM [25] in timesteps of 100, 200, 400, 600, 800, 900, and 1000. (g) The relative noise intensity (vertical axes, measured
+by
+p 1/λsnr, where λsnr denotes the signal-to-noise ratio) of the schedules in (d) and (e) w.r.t. the timesteps (horizontal axes). (h) The shifting speed √ηt (vertical axes) w.r.t. to the timesteps (horizontal axes) across various configurations of p. Note that the diffusion processes in this figure are implemented in the latent space, but we display the intermediate results after decoding back to the image space for the purpose of easy visualization.
+Based on Eq. (9), the objective function in Eq. (6) is then simplified as:
+Lθ(xt, y0, t) =
+X t wt∥ˆxt 0 −x0∥2
+2,
+(10) where wt =
+αt 2κ2ηtηt−1 , ˆxt 0 = fθ(xt, y0, t). In practice, we empirically find that the omission of weight wt results in a notable performance improvement, aligning with the conclu- sion in [12]. And the detailed training process is summarized in Algorithm 1. After training, we can generate the desirable HQ result following Algorithm 2 for any LQ testing image.
+Perceptual Regularization. As presented above, our proposed method facilitates an iterative restoration process starting from the LQ image, in contrast to prior methods that initialize from Gaussian noise. This approach effectively reduces the number of diffusion steps. The comprehensive experimental analysis in our conference paper [43] has substantiated that the proposed method yields promising results with a mere 15 sampling steps, demonstrating a notable acceleration compared to established methodologies [25], [30].
+Unfortunately, attempts at further acceleration, particularly with fewer than 5 sampling steps, tend to produce over-smooth results. This phenomenon is primarily attributed to that the L2- based loss in Eq. (10) favors the prediction of an average over plausible solutions. To overcome this limitation, we introduce an additional perceptual regularization [84] on Eq. (10) to further constrain the solution space, namely, Lθ(xt, y0, t) =
+X t ∥ˆxt 0 −x0∥2 2 + λlp
+ ˆxt
+0, x0
+
+,
+(11) where lp(·, ·) denotes the pre-trained LPIPS metric, λ is a hyper-parameter controlling the relative importance of these two constraints. This solution effectively curtails the sampling trajectory to fewer steps, e.g., 4 steps in this study, while concurrently maintaining superior performance.
+Extension to Latent Space. To alleviate the computational overhead in training, our proposed model can be optionally moved into the latent space of VQGAN [83], where the original image is compressed by a factor of four in spatial dimensions. This does not require any modifications on our model other than substituting x0 and y0 with their latent codes. An intuitive illustration is shown in Fig. 2.
+B. Noise Schedule The proposed method employs a hyper-parameter κ and a shifting sequence {ηt}T t=1 to determine the noise schedule of the diffusion process. In particular, the hyper-parameter κ regulates the overall noise intensity during the transition, and its influence on performance is empirically discussed in Sec. IV-B. The subsequent exposition mainly revolves around the construction of the shifting sequence {ηt}T
+t=1.
+Equation (2) indicates that the stochastic perturbation in state xt is proportional to √ηt, incorporating a scaling factor κ. This observation motivates us to focus on the design of √ηt rather than ηt. Previous work by Song et al. [85] has suggested that maintaining a sufficiently small value for κ√η1, such as 0.04 in LDM [25], is imperative to ensure q(x1|x0, y0) ≈q(x0). Further considering η1 →0, we set η1 to be the minimum value between (0.04/κ)2 and 0.001. For the (a1) LQ (64 x 64) (a2) LQ (128 x 128) (b1) SR (256 x 256) (c1) Attention Map (b2) SR (512 x 512) (c2) Attention Map (d1) SR (256 x 256) (d2) SR (512 x 512) w/ Self-attention w/ Swin Transformer Entropy: 5.98 Entropy: 4.89
+Fig. 4.
+Visual comparison of two different models containing some self- attention layers (denoted as model-1) or Swin Transformers (denoted as model-2). (a1) and (a2): zoomed LQ images with resolutions of 64 × 64 or 128 × 128. (b1) and (b2): super-resolved results by model-1. (c1) and (c2): visualized attention maps extracted from the first self-attention layer of model-1. Note that these visualized results are obtained by first calculating the first principal component of PCA of the attention map and then reshaping it to the targeted size. In the left-upper corner, we annotate the entropy value of these attention maps. (d1) and (d2): super-resolved results by model-2.
+terminal step T, we set ηT as 0.999, guaranteeing ηT →1.
+For the intermediate timesteps t ∈[2, T −1], we propose a non-uniform geometric schedule for √ηt as follows:
+√ηt = √η1 × bβt 0 , t = 2, · · · , T −1,
+(12)
+where
+βt =  t −1
+T −1
+p × (T −1),
+(13a) b0 = exp
+ 2(T −1) log ηT
+η1
+
+.
+(13b) It should be noted that the choice of βt and b0 is grounded in the assumption of β1 = 0, βT = T −1, and √ηT = √η1 × bT −1 . The hyper-parameter p controls the growth rate of √ηt, as depicted in Fig. 3(h).
+The proposed noise schedule exhibits a high degree of flexibility in three key aspects. First, in the case of small values of κ, the final state xT converges towards a pertur- bation around the LQ image, as illustrated in Fig. 3(c)-(d).
+Compared to the diffusion process ended at Gaussian noise, this design significantly shortens the length of the Markov chain, thereby improving the inference efficiency. Second, the hyper-parameter p provides precise control over the shifting speed, enabling a fidelity-realism trade-off in the SR results as analyzed in Sec. IV-B. Third, by setting κ = 40 and p = 0.8, our method achieves a diffusion process that degenerates into LDM [25]. This is clearly demonstrated by the visual results of the diffusion process presented in Fig. 3(e)-(f), and further supported by the comparisons on the relative noise strength as shown in Fig. 3(g).
+C. Relation to Flow Matching Flow matching [86], also known as Rectified flow [87], is another advanced framework beyond diffusion models, focusing on finding the optimal transport map from one distribution to another. In this section, we present an alternative formulation of our proposed method through flow matching, offering a novel perspective on its theoretical foundation.
+We first introduce two important definitions, namely the probability density path pt : [0, 1] × Rd →R>0, which is a time-dependent probability density function satisfying
+R pt(x) dx = 1, and a time-dependent vector field vt : [0, 1]× Rd →Rd. Given the data points x ∈Rd, the vector field vt can be used to construct a time-dependent diffeomorphic map, called a flow ϕt : [0, 1] × Rd →Rd, which is defined by the following ordinary differential equation:
+d dtϕt(x)= vt(ϕt(x)),
+(14a) ϕ0(x)= x.
+(14b) Chen et al. [88] proposed to parameterize the vector field vt as a deep neural network vt(·; θ) with parameter θ, leading to a deep parametric model of the flow ϕt, called continuous normalizing flow (NF). In image generation, NF is often used to model the transport map between one simple known distribution q0, typically Gaussian, and the data distribution q1. Lipman et al. [86] developed the conditional flow matching technique that defines conditional probability path as follows:
+pt(x|x1) = N(x|µt(x1), σt(x1)2I),
+(15) where x1 ∼q1(x). Furthermore, the corresponding flow ϕt is specified in a simple format:
+ϕt(x) = σt(x1)x + µt(x1),
+(16) where x ∼q0(x). This work provides a general framework with a close relationship to diffusion models and optimal transport theory, and more details can be found in [86], [89].
+Even though our proposed method is formulated upon the diffusion model, it corresponds to a conditional flow between the LQ image distribution q0 and the HQ image distribution q1, specifically designed for IR. For a given image pair y0 and x0 from q0 and q1 respectively, the underlying probability path pt of our method can be expressed as:
+pt(x|x0) = N(x|µt(x0), σt(x0)2I),
+(17)
+where µt(x0) = ηtx0 + (1 −ηt)y0, σt(x0) = κ
+p 1 −ηt,
+(18) and ηt is defined in Eq. (12). The conditional flow ϕt is a linear interpolation between the LQ and HQ images followed with a noise disturbance, i.e., ϕ(y0) = ηtx0 + (1 −ηt)y0 + κ
+p 1 −ηtξ,
+(19) where y0 ∼q0(y0), ξ ∼N(0, I). This intuitive and straight- forward path provides a rapid transport map between LQ and HQ distributions, thereby improving the sampling inference significantly, aligning with the conclusions in [86], [87].
+D. Discussion on Arbitrary Resolution It is widely acknowledged that the self-attention layer [90], a pivotal component in recent diffusion architectures, plays a crucial role in capturing global information in image genera- tion. In the field of IR, however, it causes a blurring issue in handling the test images with arbitrary resolutions, particularly when the test resolution largely diverges from the training resolution. One typical example is provided in Figure 4, considering two LQ images with different resolutions. The baseline model with multiple self-attention layers, which is trained on a resolution of 64 × 64, performs well when the LQ image aligns with the training resolution but yields blurred results when confronted with a mismatched resolution of 128 × 128.
+To analyze the underlying reason, we visualize the attention maps extracted from the first attention layer in this baseline network, as shown in Fig. 4(c1) and (c2). Note that these two attention maps are both interpolated to the resolution of 256 × 256 for ease of comparison. Evidently, the example with a larger resolution tends to generate a more uniformly distributed attention map, i.e., Fig. 4(c2), being consistent with the entropy2 values annotated on the left-upper corner3.
+Consequently, a uniformly distributed attention map often leads to an over-smooth outcome, introducing undesirable distortions in performance.
+To address this issue, some recent studies [4], [14] have chosen to discard the self-attention layers, a strategy that typ- ically results in a noticeable decline in performance. Inspired by Liang et al. [41], we propose a solution by substituting the self-attention layers with Swin Transformers [44]. This straightforward replacement not only alleviates the blurring problem but also maintains the promised performance, as shown in Fig. 4(d1) and (d2). This is because the Swin Transformer computes the attention map in a local window, thus being independent of the image resolution.
+IV. EXPERIMENTS ON IMAGE SUPER-RESOLUTION This section offers an evaluation of the proposed method on the task of image super-resolution (SR), with a particular focus on the setting of ×4 SR following existing studies [39], [40].
+We first provide ablation studies of the proposed model and then conduct a thorough comparison against recent state-of- the-art methods (SotAs) on one synthetic and two real-world datasets. For brevity in presentation, our method is herein referred to ResShift or ResShiftL. The former is trained based on the primary loss in Eq. (10) with 15 diffusion steps, while the latter further introduces the perceptual regularization as shown in Eq. (11) with 4 steps.
+A. Experimental Setup Training Details. The HQ images in our training data, with a resolution of 256 × 256, are randomly cropped from the training set of ImageNet [91] like LDM [25]. The LQ images are synthesized using the degradation pipeline of RealESR- GAN [39]. To train our model, we adopted the Adam [92] algorithm with its default settings in PyTorch [93] and set the mini-batch size as 64. The learning rate is gradually 2The average entropy of the attention map W ∈Rn×n is defined
+as −1
+n
+Pn
+i=1
+Pn j=1 wij ln wij, where we assume that each row of W represents the event probabilities of a discrete categorical distribution.
+3The principle of maximum entropy posits that it achieves the maximum entropy when the attention map conforms to a uniform distribution (a) Zoomed LQ (c) w/o perceptual loss (d) w/ perceptual loss (b) Ground Truth
+Fig. 5. Ablation studies of our method regarding the perceptual loss.
+decayed from 5e-5 to 2e-5 according to the annealing cosine schedule [94], and a total of 500K iterations are implemented throughout the training. Our network is mainly built upon the UNet backbone in DDPM [12], and the detailed architecture can be found in Fig. 25 of the Appendix. To increase our model’s adaptability to arbitrary image resolutions, we replace the self-attention layer in Unet with Swin transformer [44] as explained in Sec. III-D.
+Test Datasets. We randomly select 3000 images from the validation set of ImageNet [91] as our synthetic test data, denoted as ImageNet-Test for convenience. The LQ images are generated based on the commonly-used degradation model:
+y = (x ∗k) ↓+n,
+(20) where k is the blurring kernel, n is the noise, y and x denote the LQ image and HQ image, respectively. To comprehensively evaluate the performance of our model, we consider more complicated types of blurring kernel, down- sampling operator, and noise type. The detailed settings on them can be found in Appendix B1. It should be noted that we select the HQ images from ImageNet [91] instead of the prevailing datasets in SR, such as Set5 [95], Set14 [96], and Urban100 [97]. The rationale behind this setting is that these datasets only contain very few source images, which fail to thoroughly evaluate the performance of various methods under many different degradation types.
+Two real-world datasets are adopted to evaluate the efficacy of our method. The first is RealSR-V3 [98], containing 100 real images captured by Canon 5D3 and Nikon D810 cameras.
+Additionally, we collect another real-world dataset named RealSet80. It comprises 50 LQ images widely used in recent literature [39], [81], [99]–[102]. The remaining 30 images are downloaded from the internet by ourselves.
+Compared Methods. We evaluate the effectiveness of ResShift and ResShiftL in comparison to nine recent SR meth- ods, namely RealSR-JPEG [103], BSRGAN [40], RealESR- GAN [39], SwinIR [41], DASR [104], LDM [25], DiffIR [27], StableSR [30], and CCSR [42]. For a fair comparison, we accelerate the diffusion-based methods, including LDM, Dif- fIR, StableSR, and CCSR, to 15 or 4 steps using their default accelerating algorithm during inference. For clarity, the results of these diffusion-based methods are denoted as “Method-A”, where “A” represents the number of inference steps.
+Evaluation Metrics. We evaluate the efficacy of different methods using five widely used metrics, including PSNR, SSIM [105], LPIPS [84], CLIPIQA [106], and MUSIQ [107].
+Notably, CLIPIQA and MUSIQ are both non-reference metrics TABLE I QUANTITATIVE COMPARISONS OF THE PROPOSED METHOD WITH DIFFERENT ATTENTION LAYERS ON THE SYNTHETIC DATASET OF ImageNet-Test AND THE REAL-WORLD DATASET OF RealSet80.
+Methods Attention types ImageNet-Test RealSet80
+PSNR↑
+SSIM↑ LPIPS↓ CLIPIQA↑ MUSIQ↑ CLIPIQA↑ MUSIQ↑ Baseline Self-attention
+24.97 0.6806 0.2137 0.5934 51.844 0.5883 59.090 ResShiftL Swin Transformer
+25.02 0.6833 0.2076 0.5976 51.966 0.6418 61.022 (a) Zoomed LQ (b) SwinIR (c) LDM-15 (g) ResShift-15 (i) Ground Truth (d) StableSR-15 (h) ResShiftL-4 (f) DiffIR-4 (e) CCSR-15
+Fig. 6. Qualitative results of different methods on the synthetic ImageNet-Test dataset for image super-resolution. Note that we only display the comparison results to the recent five SotA methods in (b)-(f) due to the page limitation, and the complete results are presented in Fig. 18 of the Appendix.
+TABLE II QUANTITATIVE COMPARISONS OF OUR METHOD WITH VARIOUS FIDELITY LOSSES (L1 OR L2) ON THE ImageNet-Test DATASET.
+Methods Metrics
+PSNR↑
+SSIM↑ LPIPS↓ CLIPIQA↑ MUSIQ↑ ResShiftL-L1
+24.63 0.6710 0.2115 0.6261 53.8254 ResShiftL
+25.02 0.6833 0.2076 0.5976 51.9656 TABLE III QUANTITATIVE COMPARISONS OF OUR METHOD WITH (λ = 1) OR WITHOUT (λ = 0) PERCEPTUAL LOSS ON THE ImageNet-Test DATASET.
+Hyper-parameters Metrics PSNR↑SSIM↑LPIPS↓CLIPIQA↑MUSIQ↑
+λ = 0
+25.64 0.6930 0.3242 0.4241 41.8308
+λ = 1
+25.02 0.6833 0.2076 0.5976 51.9656 specifically designed for assessing the realism of images.
+Particularly, CLIPIQA leverages the CLIP [108] model, pre- trained on the extensive Laion400M [109] dataset, thereby demonstrating strong generalization ability.
+B. Ablation Studies In this part, we provide some necessary ablation studies on several components in our model. More comprehensive analysis about the noise schedule, perception-distortion trade- off, and comparisons with more advanced samplers can be found in Appendix B2.
+Fidelity loss. The loss function of our method incorporates both a fidelity loss and a perceptual regularizer, as shown in Eq. (11). The fidelity loss is formulated as the L2 norm, quantifying the discrepancy between the predicted HQ image and the underlying ground truth. We have also explored the use of an L1 norm in place of the L2 norm for the fidelity loss, resulting in a variant of our model denoted as ResShiftL-L1.
+Comparison results are summarized in Table II, demonstrating that ResShiftL outperforms ResShiftL-L1 on reference met- rics, while ResShiftL-L1 shows superior performance on non- reference metrics. Considering the high fidelity requirement for IR, we adopted the L2 norm in this study.
+TABLE IV QUANTITATIVE RESULTS AND THE CORRESPONDING STANDARD DEVIATION (STD) OF THE PROPOSED METHOD UNDER MULTIPLE RANDOM SEEDS ON THE DATASET OF ImageNet-Test.
+Metrics Seed-1 Seed-2 Seed-3 Seed-4
+Std PSNR ↑
+25.02
+25.01
+25.03
+25.01 0.00829 SSIM ↑ 0.6833 0.6826 0.6834 0.6830 0.00031 LPIPS ↓ 0.2076 0.2074 0.2076 0.2075 0.00008 Perceptual loss. In contrast to our conference version [43], this study integrates an additional perceptual regularizer, de- tailed in Eq. (11), which enhances the model efficiency by reducing the sampling steps from 15 to 4. The ablation study summarized in Table III indicates that while the introduction of the perceptual loss results in a slight decrease in PSNR and SSIM, it yields significant improvements in LPIPS, CLIPIQA, and MUSIQ. These latter three metrics more truthfully reflect the perceptual quality and realism of images, as supported by the visual comparisons in Fig. 5. Therefore, considering both performance and efficiency, the incorporation of the perceptual regularizer proves to be a critical enhancement.
+Swin Transformer. As discussed in Sec. III-D, we replace the self-attention layers in the diffusion Unet with Swin Transformer blocks to address the arbitrary resolution issue.
+Table I provides a quantitative comparison of this modification.
+On the synthetic ImageNet-Test dataset, where both training and testing images are of consistent resolution, models with either self-attention layers or Swin Transformer blocks exhibit comparable performance. In contrast, on the real-world dataset RealSet80, which contains images of varying resolutions, the baseline model using self-attention layers suffers from a significant performance drop. This is mainly attributed to the inability of self-attention layers to generalize across resolutions that largely deviate from those encountered during training. A more comprehensive analysis and visualization from the perspective of information entropy are presented in Sec. III-D and Fig. 4.
+TABLE V QUANTITATIVE COMPARISON ON PERFORMANCE, RUNNING TIME, AND THE NUMBER OF PARAMETERS OF DIFFERENT METHODS ON ImageNet-Test DATASET FOR IMAGE SUPER-RESOLUTION. THE RESULTS OF THE DIFFUSION-BASED METHODS ARE DENOTED AS “METHOD-A”, WHERE “A” REPRESENTS THE NUMBER OF SAMPLING STEPS. RUNNING TIME IS TESTED ON NVIDIA TESLA A100 GPU ON THE X4 (64→256) SR TASK. THE NON-TRAINABLE PARAMETERS, SUCH AS THE PARAMETERS OF VQGAN IN LDM, ARE MARKED WITH GRAY COLOR FOR CLARITY.
+Methods Metrics
+PSNR↑
+SSIM↑ LPIPS↓ CLIPIQA↑ MUSIQ↑ Runtime (s) #Params (M) ESRGAN [75]
+20.67
+0.448
+0.485
+0.451 43.615
+0.038
+16.70 RealSR-JPEG [103]
+23.11
+0.591
+0.326
+0.537 46.981
+0.038
+16.70 BSRGAN [40]
+24.42
+0.659
+0.259
+0.581 54.697
+0.038
+16.70 SwinIR [41]
+23.99
+0.667
+0.238
+0.564 53.790
+0.107
+28.01 RealESRGAN [39]
+24.04
+0.665
+0.254
+0.523 52.538
+0.038
+16.70 DASR [104]
+24.75
+0.675
+0.250
+0.536 48.337
+0.022
+8.06 DiffIR-4 [27]
+24.50
+0.674
+0.217
+0.554 54.567
+0.161
+26.48 LDM-50 [25]
+24.17
+0.637
+0.245
+0.600 52.665
+0.773 113.60+55.32 LDM-15 [25]
+24.89
+0.670
+0.269
+0.512 46.419
+0.247 LDM-4 [25]
+24.74
+0.657
+0.345
+0.372 38.161
+0.077 StableSR-50 [30]
+22.96
+0.611
+0.264
+0.666 59.559
+3.205 152.70+1422.49 StableSR-15 [30]
+23.37
+0.631
+0.262
+0.660 59.492
+1.070 StableSR-4 [30]
+24.11
+0.658
+0.287
+0.580 53.698
+0.399 CCSR-45 [42]
+24.67
+0.661
+0.236
+0.614 58.242
+4.500 363.15+1303.60 CCSR-15 [42]
+24.86
+0.669
+0.243
+0.581 55.773
+1.670 CCSR-4 [42]
+25.37
+0.694
+0.282
+0.450 46.204
+0.622 ResShift-15
+25.01
+0.677
+0.231
+0.592 53.660
+0.682 118.59+55.32 ResShiftL-4
+25.02
+0.683
+0.208
+0.598 51.966
+0.186 TABLE VI QUANTITATIVE RESULTS OF DIFFERENT METHODS ON TWO REAL-WORLD DATASETS FOR IMAGE SUPER-RESOLUTION. NOTE THAT THE RESULTS OF DIFFUSION-BASED METHODS ARE DENOTED AS “METHOD-A”, WHERE “A” REPRESENTS THE NUMBER OF SAMPLING STEPS.
+Methods Datasets RealSR-V3 [98] RealSet80 CLIPIQA↑ MUSIQ↑ CLIPIQA↑ MUSIQ↑ ESRGAN [75] 0.2362 29.048 0.4165 48.153 RealSR-JPEG [103] 0.3615 36.076 0.5828 57.379 BSRGAN [40] 0.5439 63.586 0.6263 66.629 SwinIR [41] 0.4654 59.632 0.6072 64.739 RealESRGAN [39] 0.4898 59.678 0.6189 64.496 DASR [104] 0.3629 45.825 0.5311 58.974 DiffIR-4 [27] 0.4315 57.449 0.5909 62.028 LDM-50 [25] 0.4907 54.391 0.5511 55.826 LDM-15 [25] 0.3836 49.317 0.4592 50.972 LDM-4 [25] 0.2865 43.205 0.3582 45.182 StableSR-50 [30] 0.5208 60.177 0.6214 62.761 StableSR-15 [30] 0.4974 59.099 0.5975 61.476 StableSR-4 [30] 0.4392 56.179 0.5250 57.445 CCSR-45 [42] 0.5681 63.222 0.6385 65.889 CCSR-15 [42] 0.5540 62.331 0.6284 64.859 CCSR-4 [42] 0.4893 58.039 0.5550 59.646 ResShift-15 0.5958 58.475 0.6645 62.782 ResShiftL-4 0.5995 57.554 0.6418 61.022 Sampling Randomness. We discuss the sampling random- ness caused by the stochastic sampling of diffusion models within the task of IR. Firstly, IR is an ill-posed problem, particularly in severely degraded scenarios where multiple HQ outputs can correspond to a single LQ image. The random sampling mechanism of diffusion models facilitates a one- to-many mapping, effectively addressing this ill-posed issue by generating diverse but plausible restoration outcomes for any testing image. Secondly, high fidelity is crucial for the task of IR. Our proposed method designs a diffusion process between the HQ and LQ images, rather than starting from random Gaussian noise, which reduces the randomness of sampling to a certain extent. Additionally, Table IV lists the quantitative comparisons of our method under various random seeds, and corresponding visual results can be found in Fig. 20 of the Appendix. These results empirically demonstrate the consistency across different outputs. On the other hand, while some level of randomness is present, it is manageable and beneficial for handling the ill-posedness of IR.
+C. Evaluation on Synthetic Data We present a comparative analysis of the proposed method with recent SotA approaches on the ImageNet-Test dataset, as summarized in Table V and Fig. 6. This evaluation reveals the following conclusions: i) Diffusion-based methods demon- strate significant advantages in terms of non-reference metrics;
+however, their performance on reference metrics is hindered by the inherent randomness in the sampling procedure. ii) Among diffusion-based methods, our proposed method exhibits su- perior performance across both reference and non-reference metrics with the same number of sampling steps, indicating an improved fidelity-realism trade-off. iii) ResShiftL is notably faster than other diffusion-based methods, achieving a preem- inent balance between performance and efficiency. Even in comparison with the SotA GAN-based method SwinIR [41], it not only maintains comparable speed but also delivers superior performance. This efficiency is attributed to our well-designed diffusion model, which has a shorter transition trajectory.
+D. Evaluation on Real-World Data
+Table VI lists the comparative evaluation using CLIP- IQA [106] and MUSIQ [107] for various approaches on two real-world datasets, namely RealSR-V3 [98] and RealSet80.
+Note that CLIPIQA, benefiting from the powerful represen- tative capability inherited from CLIP, performs consistently (a) LQ Image (a) LQ Image (e) LDM-15 (j) LDM-4 (e) LDM-15 (j) LDM-4 (f) StableSR-15 (k) StableSR-4 (f) StableSR-15 (k) StableSR-4 (l) ResShift-15 (m) ResShiftL-4 (l) ResShift-15 (m) ResShiftL-4 (i) CCSR-4 (d) CCSR-15 (i) CCSR-4 (d) CCSR-15 (b) RealESRGAN (g) BSRGAN (b) RealESRGAN (g) BSRGAN (c) SwinIR (h) DiffIR-4 (c) SwinIR (h) DiffIR-4
+Fig. 7. Qualitative comparisons on three real-world examples from RealSet80. Please zoom in for a better view.
+TABLE VII QUANTITATIVE COMPARISONS OF VARIOUS METHODS ON THE TEST DATASET ImageNet-Test FOR INPAINTING. THE BEST AND SECOND BEST RESULTS ARE HIGHLIGHTED IN BOLD AND UNDERLINE, RESPECTIVELY.
+Mask Types Metrics Methods DeepFillv2 [5] LaMa [6] RePaint [18] DDRM [28] Score-SDE [21] MCG [29] ResShiftL
+Box LPIPS↓ 0.1524 0.1158 0.1498 0.2241 0.2073 0.1464 0.1156 CLIPIQA↑ 0.4539 0.4492 0.4586 0.4705 0.4350 0.4639 0.4587 Irregular LPIPS↓ 0.2523 0.1959 0.2569 0.3712 0.3350 0.2389 0.1931 CLIPIQA↑ 0.4199 0.4204 0.4392 0.4304 0.4131 0.4388 0.4432
+Half LPIPS↓ 0.3237 0.2925 0.3331 0.4404 0.3709 0.3120 0.2663 CLIPIQA↑ 0.4147 0.4183 0.4490 0.4316 0.4263 0.4599 0.4476 Expand LPIPS↓ 0.5032 0.3561 0.4957 0.6081 0.5620 0.4320 0.3439 CLIPIQA↑ 0.4480 0.4251 0.4530 0.4276 0.4293 0.4611 0.4581 Average LPIPS↓ 0.2914 0.2401 0.3089 0.4152 0.3688 0.2823 0.2298 CLIPIQA↑ 0.4310 0.4282 0.4499 0.4400 0.4260 0.4559 0.4519 and robustly in assessing the perceptional quality of natural images. The results in Table VI reveal that the proposed ResShift or ResShiftL notably outperforms existing methods in terms of CLIPIQA. This suggests that the restored outputs by our method better align with human visual and percep- tive systems. In the case of MUSIQ evaluation, ResShift attains competitive performance when compared to current SotA methods, namely BSRGAN [40], SwinIR [41], and RealESRGAN [39]. Collectively, our method shows promising capability in addressing real-world SR challenges.
+We display three real-world examples in Fig. 7. We consider diverse scenarios, including text, animal, and natural images to ensure a comprehensive evaluation. An obvious observation is that ResShift or ResShiftL produces more naturalistic image structures. We note that the recovered results of LDM [25] and StableSR [30] are excessively smooth when compressing the inference steps to match with our proposed method, i.e., 15 or 4 steps, largely deviating from the training procedure’s 1,000 steps. Even though other GAN-based methods may also succeed in hallucinating plausible structures to some extent, they are often accompanied by obvious artifacts.
+V. EXPERIMENTS ON IMAGE INPAINTING The proposed diffusion model is a general framework for IR. This section presents a series of experiments to validate its effectiveness in the task of image inpainting. Additional exper- imental results on blind face restoration and image deblurring are provided in Appendix C.
+A. Experimental Setup Training Details. In addressing the task of inpainting, we train two variants of the ResShiftL model, both implemented at a resolution of 256 × 256. These two variants are tailored TABLE VIII QUANTITATIVE COMPARISONS OF VARIOUS METHODS ON THE TEST DATASET CelebA-Test FOR INPAINTING. THE BEST AND SECOND BEST RESULTS ARE HIGHLIGHTED IN BOLD AND UNDERLINE, RESPECTIVELY.
+Mask Types Metrics Methods DeepFillv2 [5] LaMa [6] RePaint [18] DDRM [28] Score-SDE [21] MCG [29] ResShiftL
+Box LPIPS↓ 0.0719 0.0533 0.0702 0.0755 0.1087 0.0764 0.0550 CLIPIQA↑ 0.4487 0.4365 0.4754 0.4521 0.4547 0.4714 0.4915 Irregular LPIPS↓ 0.1690 0.1221 0.1602 0.1632 0.2315 0.1522 0.1169 CLIPIQA↑ 0.4297 0.4214 0.4558 0.4359 0.4385 0.4649 0.5029
+Half LPIPS↓ 0.2147 0.1603 0.1936 0.2039 0.2415 0.1853 0.1535 CLIPIQA↑ 0.4129 0.4056 0.4751 0.4424 0.4603 0.4772 0.5189 Expand LPIPS↓ 0.4003 0.2961 0.3858 0.3978 0.4456 0.3471 0.2772 CLIPIQA↑ 0.3989 0.4053 0.4469 0.4280 0.4378 0.5022 0.5111 Average LPIPS↓ 0.2140 0.1580 0.2029 0.2101 0.2568 0.1902 0.1506 CLIPIQA↑ 0.4225 0.4172 0.4633 0.4396 0.4478 0.4789 0.5061
+Box Irregular
+Half Expand (a) LQ (b) DeepFillv2 (f) DDRM-250 (c) LaMa (e) RePaint-250 (d) Score-SDE-250 (g) MCG-250 (i) Ground Truth (h) ResShiftL-4
+Fig. 8. Visual comparisons of various methods on the test dataset of ImageNet-Test for inpainting. The results of diffusion-based methods are denoted as “Method-A”, where “A” represents the number of sampling steps. The masked areas are highlighted using a purple color. Please zoom in for a better view.
+for natural images and facial images, respectively. The former model is trained using the training dataset of ImageNet [91], while the latter is trained on the widely used face dataset FFHQ [110]. During training, we randomly generate the image masks to synthesize the LQ images following LaMa [6]. The other training configurations are kept consistent with those in image super-resolution, as detailed in Sec. IV-A.
+Test Datasets. Two test datasets are constructed by randomly selecting 2,000 images from the validation dataset of Ima- geNet [91] and CelebA-HQ [111], to facilitate an assessment on natural images and facial images, respectively. These im- ages in each dataset are uniformly divided into four groups to synthesize different types of masked images. To ensure a thorough evaluation, four distinct mask types, denoted as “Box” mask, “Irregular” mask, “Half” mask, and “Expand” mask, are considered as visually shown in Fig. 8. For each mask type, we randomly generate a set of 500 masks, and then employ them to simulate the LQ images. These two datasets are denoted as ImageNet-Test and CelebA-Test in this section.
+Compared Methods. In order to evaluate the efficacy of ResShiftL, a comparative analysis is conducted against two GAN-based methods, including DeepFillv2 [5] and LaMa [6], as well as four diffusion-based methods, namely Score- SDE [21], RePaint [18], DDRM [28], and MCG [29]. For the diffusion-based methods, we accelerate their sampling process to 250 steps using the DDIM [37] algorithm.
+Evaluation Metrics. For the sake of comprehensively assess- ing the performance of various approaches, we adopt one full-reference metric LPIPS [84] and one no-reference metric CLIPIQA [106] as our principal evaluative criteria.
+B. Comparison with SotA Methods We provide a quantitative evaluation of different methods on the test dataset of ImageNet-Test and CelebA-Test, as detailed in Table VII and Table VIII, respectively. The proposed ResShiftL achieves the best or, at the very least, compara- ble performance to recent SotA methods across most cases, particularly excelling in the more challenging mask types such as “Irregular”, “Half”, and “Expand”. In comparison
+Box Irregular
+Half Expand (b) DeepFillv2 (c) LaMa (a) LQ (f) DDRM-250 (h) ResShiftL-4 (d) Score-SDE-250 (i) Ground Truth (g) MCG-250 (e) RePaint-250
+Fig. 9.
+Visual comparisons of various methods on the test dataset of CelebA-Test for inpainting. The results of diffusion-based methods are denoted as “Method-A”, where “A” represents the number of sampling steps. The masked areas are highlighted using a purple color. Please zoom in for a better view.
+(a) LQ (b) DeepFillv2 (f) DDRM-250 (c) LaMa (e) RePaint-250 (d) Score-SDE-250 (g) MCG-250 (i) Ground Truth (h) ResShiftL-4
+Fig. 10. One typically failed example on the task of natural image inpainting.
+to other diffusion-based approaches, ResShiftL still maintains a competitive advantage, even with a significantly reduced number of sampling steps (4 vs. 250).
+A series of visual illustrations on various mask types are displayed in Fig. 8 and Fig. 9. In the case of “Box” mask, recent methods, namely LaMa [6] and MCG [29], and our ResShiftL all perform well. For the other three mask types containing large occluded areas, most of the comparison methods fail to handle such complicated scenarios.
+In contrast, the proposed ResShiftL consistently yields more plausible and realistic results under these scenarios, especially on the preservation of coherency to the unmasked regions.
+The qualitative analysis presented herein reaffirms the stability and exceptional performance of ResShiftL, aligning with the quantitative comparison above.
+While ResShiftL has demonstrated strong performance in most scenarios, failed examples still exist, particularly in cases involving large masked areas, as illustrated in Fig. 10.
+Existing methods struggle to effectively deal with such an extremely occluded example, mainly because the available information in this image is too limited. To address this challenge, a potential improvement avenue is introducing more supplementary guidance, such as text prompts. We leave the exploration in this direction for future research.
+VI. CONCLUSION In this work, we have introduced an efficient diffusion model specifically designed for IR. Unlike existing diffusion- based IR methods that require a large number of iterations to achieve satisfactory results, our proposed method is capable of formulating a diffusion model with only four sampling steps, thereby significantly improving the efficiency during inference.
+The core idea is to corrupt the HQ image towards its LQ counterpart instead of the Gaussian white noise. This strategy can effectively truncate the length of the diffusion model.
+Extensive experiments on the tasks of image super-resolution and image inpainting have demonstrated the superiority of our proposed method. In addition, more discussion on the limitations of the proposed method can be found in the Appendix. We believe that our work will pave the way for the development of more efficient and effective diffusion models to address the IR problem.
+REFERENCES [1] W. Dong, L. Zhang, G. Shi, and X. Li, “Nonlocally centralized sparse representation for image restoration,” IEEE Transactions on Image Processing (TIP), vol. 22, no. 4, pp. 1620–1630, 2012.
+[2] C. Dong, C. C. Loy, K. He, and X. Tang, “Image super-resolution using deep convolutional networks,” IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI), vol. 38, no. 2, pp. 295–307, 2015.
+[3] O. Kupyn, T. Martyniuk, J. Wu, and Z. Wang, “Deblurgan-v2: De- blurring (orders-of-magnitude) faster and better,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2019, pp. 8878–8887.
+[4] J. Whang, M. Delbracio, H. Talebi, C. Saharia, A. G. Dimakis, and P. Milanfar, “Deblurring via stochastic refinement,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2022, pp. 16 293–16 303.
+[5] J. Yu, Z. Lin, J. Yang, X. Shen, X. Lu, and T. S. Huang, “Free- form image inpainting with gated convolution,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2019, pp. 4471–4480.
+[6] R. Suvorov, E. Logacheva, A. Mashikhin, A. Remizova, A. Ashukha, A. Silvestrov, N. Kong, H. Goka, K. Park, and V. Lempitsky, “Resolution-robust large mask inpainting with fourier convolutions,” in Proceedings of the IEEE/CVF Winter conference on Applications of Computer Vision (WACV), 2022, pp. 2149–2159.
+[7] S. Gu, Q. Xie, D. Meng, W. Zuo, X. Feng, and L. Zhang, “Weighted nuclear norm minimization and its applications to low level vision,” International Journal of Computer Vision (IJCV), vol. 121, pp. 183– 208, 2017.
+[8] K. Zhang, W. Zuo, Y. Chen, D. Meng, and L. Zhang, “Beyond a gaussian denoiser: Residual learning of deep cnn for image denoising,” IEEE Transactions on Image Processing (TIP), vol. 26, no. 7, pp. 3142– 3155, 2017.
+[9] J. Sohl-Dickstein, E. Weiss, N. Maheswaranathan, and S. Ganguli, “Deep unsupervised learning using nonequilibrium thermodynamics,” in International Conference on Machine Learning (ICML).
+PMLR, 2015, pp. 2256–2265.
+[10] I. Goodfellow, J. Pouget-Abadie, M. Mirza, B. Xu, D. Warde-Farley, S. Ozair, A. Courville, and Y. Bengio, “Generative adversarial nets,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), vol. 27, 2014.
+[11] A. Brock, J. Donahue, and K. Simonyan, “Large scale GAN training for high fidelity natural image synthesis,” in Proceedings of International Conference on Learning Representations (ICLR), 2019.
+[12] J. Ho, A. Jain, and P. Abbeel, “Denoising diffusion probabilistic models,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), vol. 33, 2020, pp. 6840–6851.
+[13] P. Dhariwal and A. Nichol, “Diffusion models beat gans on image syn- thesis,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), vol. 34, 2021, pp. 8780–8794.
+[14] M. Delbracio and P. Milanfar, “Inversion by direct iteration: An alternative to denoising diffusion for image restoration,” Transactions on Machine Learning Research (TMLR), 2023.
+[15] Z. Luo, F. K. Gustafsson, Z. Zhao, J. Sj¨olund, and T. B. Sch¨on, “Image restoration with mean-reverting stochastic differential equations,” in International Conference on Machine Learning (ICML), vol. 202.
+PMLR, 2023, pp. 23 045–23 066.
+[16] N. Murata, K. Saito, C.-H. Lai, Y. Takida, T. Uesaka, Y. Mitsufuji, and S. Ermon, “GibbsDDRM: A partially collapsed Gibbs sampler for solving blind inverse problems with denoising diffusion restoration,” in International Conference on Machine Learning (ICML), vol. 202, 2023, pp. 25 501–25 522.
+[17] C. Meng, Y. He, Y. Song, J. Song, J. Wu, J.-Y. Zhu, and S. Ermon, “SDEdit: Guided image synthesis and editing with stochastic differen- tial equations,” in Proceedings of International Conference on Learning Representations (ICLR), 2021.
+[18] A. Lugmayr, M. Danelljan, A. Romero, F. Yu, R. Timofte, and L. Van Gool, “RePaint: Inpainting using denoising diffusion probabilis- tic models,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), June 2022, pp. 11 461–11 471.
+[19] H. Chung, B. Sim, and J. C. Ye, “Come-closer-diffuse-faster: Ac- celerating conditional diffusion models for inverse problems through stochastic contraction,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2022, pp. 12 413– 12 422.
+[20] Z. Yue and C. C. Loy, “DifFace: Blind face restoration with diffused error contraction,” IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI), 2024.
+[21] Y. Song, J. Sohl-Dickstein, D. P. Kingma, A. Kumar, S. Ermon, and B. Poole, “Score-based generative modeling through stochastic differential equations,” in Proceedings of International Conference on Learning Representations (ICLR), 2021.
+[22] C. Saharia, W. Chan, H. Chang, C. Lee, J. Ho, T. Salimans, D. Fleet, and M. Norouzi, “Palette: Image-to-image diffusion models,” in Pro- ceedings of ACM SIGGRAPH Conference, 2022, pp. 1–10.
+[23] Z. Liang, Z. Li, S. Zhou, C. Li, and C. C. Loy, “Control color: Mul- timodal diffusion-based interactive image colorization,” arXiv preprint arXiv:2402.10855, 2024.
+[24] C. Saharia, J. Ho, W. Chan, T. Salimans, D. J. Fleet, and M. Norouzi, “Image super-resolution via iterative refinement,” IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI), vol. 45, no. 4, pp. 4713–4726, 2022.
+[25] R. Rombach, A. Blattmann, D. Lorenz, P. Esser, and B. Ommer, “High-resolution image synthesis with latent diffusion models,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2022, pp. 10 684–10 695.
+[26] H. Li, Y. Yang, M. Chang, S. Chen, H. Feng, Z. Xu, Q. Li, and Y. Chen, “SRDiff: Single image super-resolution with diffusion probabilistic models,” Neurocomputing, vol. 479, pp. 47–59, 2022.
+[27] B. Xia, Y. Zhang, S. Wang, Y. Wang, X. Wu, Y. Tian, W. Yang, and L. Van Gool, “DiffIR: Efficient diffusion model for image restoration,” in Proceedings of the IEEE/CVF International Conference on Com- puter Vision (ICCV), 2023, pp. 13 095–13 105.
+[28] B. Kawar, M. Elad, S. Ermon, and J. Song, “Denoising diffusion restoration models,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), vol. 35, 2022, pp. 23 593–23 606.
+[29] H. Chung, B. Sim, D. Ryu, and J. C. Ye, “Improving diffusion models for inverse problems using manifold constraints,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), vol. 35, 2022, pp. 25 683–25 696.
+[30] J. Wang, Z. Yue, S. Zhou, K. C. Chan, and C. C. Loy, “Exploiting diffusion prior for real-world image super-resolution,” International Journal of Computer Vision (IJCV), pp. 1–21, 2024.
+[31] T. Yang, P. Ren, X. Xie, and L. Zhang, “Pixel-aware stable diffusion for realistic image super-resolution and personalized stylization,” arXiv preprint arXiv:2308.14469, 2023.
+[32] H. Sun, W. Li, J. Liu, H. Chen, R. Pei, X. Zou, Y. Yan, and Y. Yang, “CoSeR: Bridging image and language for cognitive super-resolution,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2024, pp. 25 868–25 878.
+[33] Y. Wang, J. Yu, and J. Zhang, “Zero-shot image restoration using denoising diffusion null-space model,” in Proceedings of International Conference on Learning Representations (ICLR), 2023.
+[34] Y. Zhu, K. Zhang, J. Liang, J. Cao, B. Wen, R. Timofte, and L. Van Gool, “Denoising diffusion models for plug-and-play image restoration,” in Proceedings of the IEEE/CVF International Conference on Computer Vision Workshops (CVPR-W), 2023, pp. 1219–1229.
+[35] R. Wu, T. Yang, L. Sun, Z. Zhang, S. Li, and L. Zhang, “SeeSR:
+Towards semantics-aware real-world image super-resolution,” in Pro- ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2024, pp. 25 456–25 467.
+[36] A. Q. Nichol and P. Dhariwal, “Improved denoising diffusion prob- abilistic models,” in International Conference on Machine Learning (ICML).
+PMLR, 2021, pp. 8162–8171.
+[37] J. Song, C. Meng, and S. Ermon, “Denoising diffusion implicit models,” in Proceedings of International Conference on Learning Representations (ICLR), 2021.
+[38] C. Lu, Y. Zhou, F. Bao, J. Chen, C. Li, and J. Zhu, “DPM-solver: A fast ODE solver for diffusion probabilistic model sampling in around 10 steps,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), vol. 35, 2022, pp. 5775–5787.
+[39] X. Wang, L. Xie, C. Dong, and Y. Shan, “Real-esrgan: Training real- world blind super-resolution with pure synthetic data,” in Proceedings of the IEEE/CVF International Conference on Computer Vision Work- shops (ICCV-W), 2021, pp. 1905–1914.
+[40] K. Zhang, J. Liang, L. Van Gool, and R. Timofte, “Designing a practical degradation model for deep blind image super-resolution,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2021, pp. 4791–4800.
+[41] J. Liang, J. Cao, G. Sun, K. Zhang, L. Van Gool, and R. Timofte, “Swinir: Image restoration using swin transformer,” in Proceedings of the IEEE/CVF International Conference on Computer Vision Work- shops (ICCV-W), 2021, pp. 1833–1844.
+[42] L. Sun, R. Wu, Z. Zhang, H. Yong, and L. Zhang, “Improving the stability of diffusion models for content consistent super-resolution,” arXiv preprint arXiv:2401.00877, 2024.
+[43] Z. Yue, J. Wang, and C. C. Loy, “Resshift: Efficient diffusion model for image super-resolution by residual shifting,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), vol. 36, 2023, pp. 13 294–13 307.
+[44] Z. Liu, Y. Lin, Y. Cao, H. Hu, Y. Wei, Z. Zhang, S. Lin, and B. Guo, “Swin transformer: Hierarchical vision transformer using shifted win- dows,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2021, pp. 10 012–10 022.
+[45] A. Foi, M. Trimeche, V. Katkovnik, and K. Egiazarian, “Practical poissonian-gaussian noise modeling and fitting for single-image raw- data,” IEEE Transactions on Image Processing (TIP), vol. 17, no. 10, pp. 1737–1754, 2008.
+[46] D. Meng and F. De La Torre, “Robust matrix factorization with unknown noise,” in Proceedings of the IEEE/CVF International Con- ference on Computer Vision (ICCV), 2013, pp. 1337–1344.
+[47] X. Cao, Q. Zhao, D. Meng, Y. Chen, and Z. Xu, “Robust low-rank matrix factorization under general mixture noise distributions,” IEEE Transactions on Image Processing (TIP), vol. 25, no. 10, pp. 4677– 4690, 2016.
+[48] F. Zhu, G. Chen, J. Hao, and P.-A. Heng, “Blind image denoising via dependent dirichlet process tree,” IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI), vol. 39, no. 8, pp. 1518– 1531, 2016.
+[49] Z. Yue, D. Meng, Y. Sun, and Q. Zhao, “Hyperspectral image restora- tion under complex multi-band noises,” Remote Sensing, vol. 10, no. 10, p. 1631, 2018.
+[50] L. I. Rudin, S. Osher, and E. Fatemi, “Nonlinear total variation based noise removal algorithms,” Physica D: Nonlinear Phenomena, vol. 60, no. 1-4, pp. 259–268, 1992.
+[51] E. P. Simoncelli and E. H. Adelson, “Noise removal via bayesian wavelet coring,” in Proceedings of IEEE International Conference on Image Processing (ICIP), vol. 1, 1996, pp. 379–382.
+[52] A. Buades, B. Coll, and J.-M. Morel, “A non-local algorithm for image denoising,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), vol. 2, 2005, pp. 60–65.
+[53] W. Dong, L. Zhang, G. Shi, and X. Wu, “Image deblurring and super-resolution by adaptive sparse domain selection and adaptive regularization,” IEEE Transactions on Image Processing (TIP), vol. 20, no. 7, pp. 1838–1857, 2011.
+[54] S. Gu, W. Zuo, Q. Xie, D. Meng, X. Feng, and L. Zhang, “Convo- lutional sparse coding for image super-resolution,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2015, pp. 1823–1831.
+[55] J. Xu, L. Zhang, D. Zhang, and X. Feng, “Multi-channel weighted nuclear norm minimization for real color image denoising,” in Proceed- ings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2017.
+[56] K. He, J. Sun, and X. Tang, “Single image haze removal using dark channel prior,” IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI), vol. 33, no. 12, pp. 2341–2353, 2010.
+[57] J. Pan, D. Sun, H. Pfister, and M.-H. Yang, “Blind image deblurring using dark channel prior,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2016, pp. 1628–
+1636.
+[58] J. Sun, W. Cao, Z. Xu, and J. Ponce, “Learning a convolutional neural network for non-uniform motion blur removal,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), June 2015.
+[59] W. Shi, J. Caballero, F. Husz´ar, J. Totz, A. P. Aitken, R. Bishop, D. Rueckert, and Z. Wang, “Real-time single image and video super- resolution using an efficient sub-pixel convolutional neural network,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2016, pp. 1874–1883.
+[60] Y. Tai, J. Yang, X. Liu, and C. Xu, “Memnet: A persistent memory network for image restoration,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2017, pp. 4539–
+4547.
+[61] W.-S. Lai, J.-B. Huang, N. Ahuja, and M.-H. Yang, “Deep laplacian pyramid networks for fast and accurate super-resolution,” in Proceed- ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2017, pp. 624–632.
+[62] M. Haris, G. Shakhnarovich, and N. Ukita, “Deep back-projection networks for super-resolution,” in Proceedings of the IEEE/CVF Con- ference on Computer Vision and Pattern Recognition (CVPR), 2018, pp. 1664–1673.
+[63] Y. Zhang, Y. Tian, Y. Kong, B. Zhong, and Y. Fu, “Residual dense network for image super-resolution,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2018, pp. 2472–2481.
+[64] X. Hu, H. Mu, X. Zhang, Z. Wang, T. Tan, and J. Sun, “Meta-sr: A magnification-arbitrary network for super-resolution,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2019, pp. 1575–1584.
+[65] Z. Wan, J. Zhang, D. Chen, and J. Liao, “High-fidelity pluralistic image completion with transformers,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2021, pp. 4692–
+4701.
+[66] S. W. Zamir, A. Arora, S. Khan, M. Hayat, F. S. Khan, and M.- H. Yang, “Restormer: Efficient transformer for high-resolution image restoration,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2022, pp. 5728–5739.
+[67] Z. Wang, X. Cun, J. Bao, W. Zhou, J. Liu, and H. Li, “Uformer: A general u-shaped transformer for image restoration,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2022, pp. 17 683–17 693.
+[68] K. Zhang, W. Zuo, and L. Zhang, “Learning a single convolutional super-resolution network for multiple degradations,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2018, pp. 3262–3271.
+[69] D. Simon and M. Elad, “Rethinking the csc model for natural images,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), 2019.
+[70] K. Zhang, L. V. Gool, and R. Timofte, “Deep unfolding network for image super-resolution,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2020, pp. 3217–
+3226.
+[71] D. Liu, B. Wen, Y. Fan, C. C. Loy, and T. S. Huang, “Non-local recurrent network for image restoration,” Proceedings of Advances in Neural Information Processing Systems (NeurIPS), vol. 31, 2018.
+[72] D. Ulyanov, A. Vedaldi, and V. Lempitsky, “Deep image prior,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2018, pp. 9446–9454.
+[73] J. Gu, Y. Shen, and B. Zhou, “Image processing using multi-code gan prior,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2020.
+[74] X. Pan, X. Zhan, B. Dai, D. Lin, C. C. Loy, and P. Luo, “Exploiting deep generative prior for versatile image restoration and manipulation,” IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI), vol. 44, no. 11, pp. 7474–7489, 2022.
+[75] X. Wang, K. Yu, S. Wu, J. Gu, Y. Liu, C. Dong, Y. Qiao, and C. Change Loy, “ESRGAN: Enhanced super-resolution generative adversarial networks,” in Proceedings of the European Conference on Computer Vision Workshops (ECCV-W), 2018.
+[76] Z. Yue, Q. Zhao, J. Xie, L. Zhang, D. Meng, and K.-Y. K. Wong, “Blind image super-resolution with elaborate degradation modeling on noise and kernel,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2022, pp. 2128–2138.
+[77] A. Lugmayr, M. Danelljan, L. Van Gool, and R. Timofte, “SRFlow:
+Learning the super-resolution space with normalizing flow,” in Pro- ceedings of the European Conference on Computer Vision (ECCV), 2020, pp. 715–732.
+[78] G.
+Parmar,
+T.
+Park,
+S.
+Narasimhan,
+and
+J.-Y.
+Zhu,
+“One- step image translation with text-to-image models,” arXiv preprint arXiv:2403.12036, 2024.
+[79] J. Xiao, R. Feng, H. Zhang, Z. Liu, Z. Yang, Y. Zhu, X. Fu, K. Zhu, Y. Liu, and Z.-J. Zha, “Dreamclean: Restoring clean image using deep diffusion prior,” in Proceedings of International Conference on Learning Representations (ICLR), 2024.
+[80] L. Zhang, A. Rao, and M. Agrawala, “Adding conditional control to text-to-image diffusion models,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2023, pp. 3836–
+3847.
+[81] X. Lin, J. He, Z. Chen, Z. Lyu, B. Fei, B. Dai, W. Ouyang, Y. Qiao, and C. Dong, “Diffbir: Towards blind image restoration with generative diffusion prior,” arXiv preprint arXiv:2308.15070, 2023.
+[82] Y. Zhang, X. Shi, D. Li, X. Wang, J. Wang, and H. Li, “A uni- fied conditional framework for diffusion-based image restoration,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), vol. 36, 2024, pp. 49 703–49 714.
+[83] P. Esser, R. Rombach, and B. Ommer, “Taming transformers for high-resolution image synthesis,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2021, pp. 12 873–12 883.
+[84] R. Zhang, P. Isola, A. A. Efros, E. Shechtman, and O. Wang, “The unreasonable effectiveness of deep features as a perceptual metric,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2018, pp. 586–595.
+[85] Y. Song and S. Ermon, “Generative modeling by estimating gradients of the data distribution,” in Proceedings of Advances in Neural Infor- mation Processing Systems (NeurIPS), vol. 32, 2019.
+[86] Y. Lipman, R. T. Q. Chen, H. Ben-Hamu, M. Nickel, and M. Le, “Flow matching for generative modeling,” in Proceedings of International Conference on Learning Representations (ICLR), 2023.
+[87] X. Liu, C. Gong, and qiang liu, “Flow straight and fast: Learning to generate and transfer data with rectified flow,” in Proceedings of International Conference on Learning Representations (ICLR), 2023.
+[88] R. T. Q. Chen, Y. Rubanova, J. Bettencourt, and D. K. Duvenaud, “Neural ordinary differential equations,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), S. Bengio, H. Wal- lach, H. Larochelle, K. Grauman, N. Cesa-Bianchi, and R. Garnett, Eds., vol. 31, 2018.
+[89] X. Liu, C. Gong, and Q. Liu, “Flow straight and fast: Learning to generate and transfer data with rectified flow,” arXiv preprint arXiv:2209.03003, 2022.
+[90] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N.
+Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), 2017.
+[91] J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, and L. Fei-Fei, “Imagenet:
+A large-scale hierarchical image database,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2009, pp. 248–255.
+[92] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization.” in Proceedings of International Conference on Learning Representa- tions (ICLR), 2015.
+[93] A. Paszke, S. Gross, F. Massa, A. Lerer, J. Bradbury, G. Chanan, T. Killeen, Z. Lin, N. Gimelshein, L. Antiga et al., “Pytorch: An imper- ative style, high-performance deep learning library,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), vol. 32,
+2019.
+[94] I. Loshchilov and F. Hutter, “SGDR: Stochastic gradient descent with warm restarts,” in Proceedings of International Conference on Learning Representations (ICLR), 2017.
+[95] M. Bevilacqua, A. Roumy, C. Guillemot, and M. L. Alberi-Morel, “Low-complexity single-image super-resolution based on nonnegative neighbor embedding,” 2012.
+[96] R. Zeyde, M. Elad, and M. Protter, “On single image scale-up using sparse-representations,” in International Conference on Curves and Surfaces.
+Springer, 2012, pp. 711–730.
+[97] J.-B. Huang, A. Singh, and N. Ahuja, “Single image super-resolution from transformed self-exemplars,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2015, pp. 5197–5206.
+[98] J. Cai, H. Zeng, H. Yong, Z. Cao, and L. Zhang, “Toward real-world single image super-resolution: A new benchmark and a new model,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2019, pp. 3086–3095.
+[99] D. Martin, C. Fowlkes, D. Tal, and J. Malik, “A database of human segmented natural images and its application to evaluating segmenta- tion algorithms and measuring ecological statistics,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), vol. 2, 2001, pp. 416–423.
+[100] Y. Matsui, K. Ito, Y. Aramaki, A. Fujimoto, T. Ogawa, T. Yamasaki, and K. Aizawa, “Sketch-based manga retrieval using manga109 dataset,” Multimedia Tools and Applications, vol. 76, pp. 21 811–21 838, 2017.
+[101] A. Ignatov, N. Kobyshev, R. Timofte, K. Vanhoey, and L. Van Gool, “Dslr-quality photos on mobile devices with deep convolutional net- works,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2017.
+[102] K. Zhang, W. Zuo, and L. Zhang, “Ffdnet: Toward a fast and flexible solution for cnn-based image denoising,” IEEE Transactions on Image Processing (TIP), vol. 27, no. 9, pp. 4608–4622, 2018.
+[103] X. Ji, Y. Cao, Y. Tai, C. Wang, J. Li, and F. Huang, “Real-world super- resolution via kernel estimation and noise injection,” in Proceedings of the IEEE/CVF International Conference on Computer Vision Work- shops (CVPR-W), 2020, pp. 466–467.
+[104] J. Liang, H. Zeng, and L. Zhang, “Efficient and degradation-adaptive network for real-world image super-resolution,” in Proceedings of the European Conference on Computer Vision (ECCV), 2022, pp. 574–591.
+[105] Z. Wang, A. Bovik, H. Sheikh, and E. Simoncelli, “Image quality assessment: from error visibility to structural similarity,” IEEE Trans- actions on Image Processing (TIP), vol. 13, no. 4, pp. 600–612, 2004.
+[106] J. Wang, K. C. Chan, and C. C. Loy, “Exploring clip for assessing the look and feel of images,” in Proceedings of the AAAI Conference on Artificial Intelligence, 2023.
+[107] J. Ke, Q. Wang, Y. Wang, P. Milanfar, and F. Yang, “Musiq: Multi- scale image quality transformer,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2021, pp. 5148–
+5157.
+[108] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark et al., “Learning transferable visual models from natural language supervision,” in International Conference on Machine Learning (ICML), 2021, pp. 8748–8763.
+[109] C. Schuhmann, R. Vencu, R. Beaumont, R. Kaczmarczyk, C. Mullis, A. Katta, T. Coombes, J. Jitsev, and A. Komatsuzaki, “Laion-400m:
+Open dataset of clip-filtered 400 million image-text pairs,” in Proceed- ings of Advances in Neural Information Processing Systems Workshops (NeurIPS-W), 2021.
+[110] T. Karras, S. Laine, and T. Aila, “A style-based generator architecture for generative adversarial networks,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2019, pp. 4401–4410.
+[111] T. Karras, T. Aila, S. Laine, and J. Lehtinen, “Progressive growing of GANs for improved quality, stability, and variation,” in Proceedings of International Conference on Learning Representations (ICLR), 2018.
+[112] Y. Blau and T. Michaeli, “The perception-distortion tradeoff,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), June 2018.
+[113] L. Liu, Y. Ren, Z. Lin, and Z. Zhao, “Pseudo numerical methods for diffusion models on manifolds,” in Proceedings of International Conference on Learning Representations (ICLR), 2022.
+[114] X. Wang, Y. Li, H. Zhang, and Y. Shan, “Towards real-world blind face restoration with generative facial prior,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2021, pp. 9168–9178.
+[115] S. Zhou, K. Chan, C. Li, and C. C. Loy, “Towards robust blind face restoration with codebook lookup transformer,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), 2022.
+[116] G. B. Huang, M. Mattar, T. Berg, and E. Learned-Miller, “Labeled faces in the wild: A database forstudying face recognition in unconstrained environments,” in Workshop on faces in ’Real-Life’ Images: detection, alignment, and recognition, 2008.
+[117] S. Yang, P. Luo, C.-C. Loy, and X. Tang, “Wider face: A face detection benchmark,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2016, pp. 5525–5533.
+[118] X. Li, C. Chen, S. Zhou, X. Lin, W. Zuo, and L. Zhang, “Blind face restoration via deep multi-scale component dictionaries,” in Proceed- ings of the European Conference on Computer Vision (ECCV), 2020.
+[119] C. Chen, X. Li, L. Yang, X. Lin, L. Zhang, and K.-Y. K. Wong, “Pro- gressive semantic-aware style transformation for blind face restoration,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2021.
+[120] Z. Wang, J. Zhang, R. Chen, W. Wang, and P. Luo, “Restoreformer:
+High-quality blind face restoration from undegraded key-value pairs,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2022.
+[121] Y. Gu, X. Wang, L. Xie, C. Dong, G. Li, Y. Shan, and M.-M.
+Cheng, “Vqfr: Blind face restoration with vector-quantized dictionary and parallel decoder,” in Proceedings of the European Conference on Computer Vision (ECCV), 2022, pp. 126–143.
+[122] Z. Wang, A. C. Bovik, H. R. Sheikh, and E. P. Simoncelli, “Image quality assessment: from error visibility to structural similarity,” IEEE Transactions on Image Processing (TIP), vol. 13, no. 4, pp. 600–612,
+2004.
+[123] M. Heusel, H. Ramsauer, T. Unterthiner, B. Nessler, and S. Hochreiter, “Gans trained by a two time-scale update rule converge to a local nash equilibrium,” in Proceedings of Advances in Neural Information Processing Systems (NeurIPS), 2017.
+[124] J. Deng, J. Guo, N. Xue, and S. Zafeiriou, “Arcface: Additive angular margin loss for deep face recognition,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR),
+2019.
+[125] S.-J. Cho, S.-W. Ji, J.-P. Hong, S.-W. Jung, and S.-J. Ko, “Rethinking coarse-to-fine approach in single image deblurring,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2021, pp. 4641–4650.
+[126] S. W. Zamir, A. Arora, S. Khan, M. Hayat, F. S. Khan, M.-H. Yang, and L. Shao, “Multi-stage progressive image restoration,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2021, pp. 14 821–14 831.
+[127] S. Nah, T. Hyun Kim, and K. Mu Lee, “Deep multi-scale convolutional neural network for dynamic scene deblurring,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2017, pp. 3883–3891.
+[128] A. Mittal, R. Soundararajan, and A. C. Bovik, “Making a “completely blind” image quality analyzer,” IEEE Signal Processing Letters (SPL), vol. 20, no. 3, pp. 209–212, 2012.
+Zongsheng Yue (Member, IEEE) received his Ph.D.
+degree from Xi’an Jiaotong University, Xi’an, China, in 2021. He is currently a postdoctoral research fellow with the College of Computing and Data Science at Nanyang Technological University. From September 2021 to March 2022, he was an associate researcher in the Department of Computer Science at Hong Kong University. He was a research assis- tant at the Department of Computing, Hong Kong Polytechnic University, from October 2018 to June 2019, and at the Institute of Future Cities, The Chinese University of Hong Kong, from February 2017 to September 2017, respectively. His current research interests include noise modeling, image restoration, and diffusion models.
+Chen Change Loy (Senior Member, IEEE) is cur- rently a Professor with the College of Computing and Data Science, Nanyang Technological Univer- sity, Singapore. He received the PhD degree in com- puter science from the Queen Mary University of London, in 2010. Prior to joining NTU, he served as a research assistant professor with the Department of Information Engineering, The Chinese University of Hong Kong, from 2013 to 2018. His research inter- ests include computer vision and deep learning with a focus on image/video restoration and enhancement, generative tasks, and representation learning. He serves as an associate editor of the IEEE Transactions on Pattern Analysis and Machine Intelligence and the International Journal of Computer Vision. He also serves/served as an Area Chair of top conferences such as ICCV, CVPR, ECCV, NeurIPS and
+ICLR.
+APPENDIX A. Mathematical Details • Derivation of Eq. (2): According to the transition distribution of Eq. (1) of our manuscript, xt can be sampled via the following reparameterization trick:
+xt = xt−1 + αte0 + κ√αtξt,
+(21) where ξt ∼N(x|0, I), αt = ηt −ηt−1 for t > 1 and α1 = η1.
+Applying this sampling trick recursively, we can build up the relation between xt and x0 as follows:
+xt = x0 +
+t
+X
+i=1 αie0 + κ
+t
+X
+i=1
+√αiξi = x0 + ηte0 + κ
+t
+X
+i=1 √αiξi,
+(22) where ξi ∼N(x|0, I).
+We can further merge ξ1, ξ2, · · · , ξt and simplify Eq. (22) as follows:
+xt = x0 + ηte0 + κ√ηtξt.
+(23) Then the marginal distribution of Eq. (2) in the main text is obtained based on Eq. (23).
+• Derivation of Eq. (7): According to Bayes’s theorem, we have q(xt−1|xt, x0, y0) ∝q(xt|xt−1, y0)q(xt−1|x0, y0),
+(24)
+where q(xt|xt−1, y0) = N(xt; xt−1 + αte0, κ2αtI), q(xt−1|x0, y0) = N(xt−1; x0 + ηt−1e0, κ2ηt−1I).
+(25) We now focus on the quadratic form in the exponent of q(xt−1|xt, x0, y0), namely, −(xt −xt−1 −αte0)(xt −xt−1 −αte0)T
+2κ2αt −(xt−1 −x0 −ηt−1e0)(xt−1 −x0 −ηt−1e0)T 2κ2ηt−1
+= −1
+
+κ2αt
++ κ2ηt−1
+ xt−1xT
+t−1 + xt −αte0
+κ2αt + x0 + ηt−1e0 κ2ηt−1
+
+xT t−1 + const = −(xt−1 −µ)(xt−1 −µ)T
+2λ2 + const
+(26)
+where µ = ηt−1
+ηt xt + αt
+ηt x0, λ2 = κ2 ηt−1
+ηt
+αt,
+(27) and const denotes the item that is independent of xt−1. This quadratic form induces the Gaussian distribution of Eq. (7) in our manuscript.
+B. Experimental Results on Image Super-resolution 1) Degradation Settings of the Synthetic Dataset: We synthesize the testing dataset ImageNet-Test based on the degradation model in RealESRGAN [39] but remove the second-order operation. We observed that the low-quality (LQ) image generated by the pipeline with second-order degradation exhibited significantly more pronounced corruption than most of the real-world LQ images, we thus discarded the second-order operation to align the authentic degradation better. Next, we gave the detailed configuration of the blurring kernel, downsampling operator, and noise types.
+Blurring kernel. The blurring kernel is randomly sampled from the isotropic Gaussian and anisotropic Gaussian kernels with a probability of [0.6, 0.4]. The window size of the kernel is set to 13. For isotropic Gaussian kernel, the kernel width is uniformly sampled from [0.2, 0.8]. For an anisotropic Gaussian kernel, the kernel widths along the x-axis and y-axis are both randomly sampled from [0.2, 0.8].
+Downampling. We downsample the image using the “interpolate” function of PyTorch [93]. The interpolation mode is randomly selected from “area”, “bilinear”, and “bicubic”.
+Noise. We first add Gaussian and Poisson noise with a probability of [0.5, 0.5]. For Gaussian noise, the noise level is randomly chosen from [1,15]. For Poisson noise, we set the scale parameter in [0.05, 0.3]. Finally, the noisy image is further compressed using JPEG with a quality factor ranging in [70, 95].
+TABLE IX PERFORMANCE COMPARISON OF RESSHIFT ON THE ImageNet-Test DATASET FOR IMAGE SUPER-RESOLUTION UNDER DIFFERENT CONFIGURATIONS.
+Configurations Metrics
+T
+p
+κ
+PSNR↑
+SSIM↑ LPIPS↓
+0.3
+2.0
+25.64 0.6903 0.3242
+25.20 0.6828 0.2517
+25.01 0.6769 0.2312
+24.52 0.6585 0.2253
+24.22 0.6483 0.2212
+0.3
+2.0
+25.01 0.6769 0.2312
+0.5
+25.05 0.6745 0.2387
+1.0
+25.12 0.6780 0.2613
+2.0
+25.32 0.6827 0.3050
+3.0
+25.39 0.5813 0.3432
+0.3
+0.5
+24.90 0.6709 0.2437
+1.0
+24.84 0.6699 0.2354
+2.0
+25.01 0.6769 0.2312
+8.0
+25.31 0.6858 0.2592
+16.0
+24.46 0.6891 0.2772 LQ Image (10, 0.3, 2.0) (15, 0.3, 2.0) (15, 0.3, 0.5) (15, 0.3, 2.0) (15, 0.5, 2.0) (15, 0.3, 1.0) (50, 0.3, 2.0) (15, 3.0, 2.0) (15, 0.3, 16.0) (15, 2.0, 2.0) (15, 0.3, 8.0) (30, 0.3, 2.0) (15, 1.0, 2.0) (15, 0.3, 2.0) (4, 0.3, 2.0)
+Fig. 11. Qualitative comparisons of ResShift under different combinations of (T, p, κ) on the task of image super-resolution. For example, “(15, 0.3, 2.0)” represents the recovered result with T = 15, p = 0.3, and κ = 2.0. Please zoom in for a better view.
+2) Model Analysis: Diffusion Steps T and Hyper-parameter p. The proposed transition distribution in our method significantly reduces the diffusion steps T in the Markov chain. The hyper-parameter p allows for flexible control over the rate of residual shifting during the transition. Performance evaluations of ResShift on the test dataset of ImageNet-Test, under various configurations of T and p, are presented in Table IX. This comparison reveals that both T and p render an evident trade-off between the fidelity (measured by the reference metrics of PSNR and SSIM) and the perceptual quality (measured by LPIPS) of the super-resolved results. Taking the hyper-parameter p as an example, an upward adjustment of its value is associated with enhancements in fidelity-oriented metrics while concurrently resulting in a deterioration in perceptual quality.
+Furthermore, the visual comparison in Fig. 11 shows that a large value of p will suppress the model’s ability to hallucinate more image details, thereby yielding blurry outputs.
+(a) Zoomed LQ (c) RealSR-JPEG (h) LDM-15 (j) ResShift-15 (e) RealESRGAN (g) DASR (b) ESRGAN (f) SwinIR (k) ResShiftL-4 (d) BSRGAN (i) StableSR-15
+Fig. 12. One typical real-world failed case in the task of image super-resolution.
+TABLE X QUANTITATIVE COMPARISON OF THE PROPOSED RESSHIFTL AND LDM WITH VARIOUS ACCELERATED SAMPLING ALGORITHMS ON THE DATASET OF ImageNet-Test FOR IMAGE SUPER-RESOLUTION.
+Methods Sampler
+PSNR↑
+SSIM↑ LPIPS↓ CLIPIQA↑ MUSIQ↑
+LDM-4
+DDIM
+24.74 0.6573 0.3452 0.3717 38.1612
+LDM-4
+DPM
+24.84 0.6667 0.2773 0.5027 46.2975
+LDM-4
+PLMS
+20.56 0.4432 0.4616 0.7140 58.7399 ResShift-4
+-
+25.02 0.6833 0.2076 0.5976 51.9656
+Fig. 13.
+Perception-distortion trade-off of ResShift and LDM.
+The vertical and horizontal axes represent the strength of the per- ception and distortion, measured by LPIPS and MSE, respectively.
+Perception-Distortion Trade-off. There exists a well-known phe- nomenon called perception-distortion trade-off [112] in SR. In particu- lar, the augmentation of the generative capability of a restoration model, such as increasing the sampling steps for a diffusion-based method or amplifying the weight of the adversarial loss for a GAN-based method, will result in a deterioration in fidelity preservation while concurrently enhancing the realism of restored images. In Fig. 13, we plot the perception-distortion curves of ResShift and the representative baseline method LDM [25], wherein the perception and distortion are measured by LPIPS and mean square-error (MSE), respectively. This plot reflects the perception quality and the reconstruction fidelity of ResShift and LDM across varying numbers of diffusion steps from 4 to 50. As can be observed, the perception-distortion curve of ResShift consistently resides beneath that of the LDM, indicating its superiority in balancing perception and distortion.
+Hyper-parameter κ. The hyper-parameter κ dominates the noise strength in state xt. In Table IX, we report the influence of varying κ values on the performance of ResShift. Combining this quantitative comparison with the visualization in Fig. 11, we can find that excessively large or small values of κ will smooth the recovered results, regardless of their favorable metrics of PSNR and SSIM. When κ is in the range of [1.0, 2.0], our method achieves the most realistic quality, as evidenced by LPIPS, which is more desirable in real applications. We thus set κ to be 2.0 in this work.
+Comparison to LDM with More Advanced Samplers. We conducted additional experiments to compare the proposed method with LDM accelerated by more advanced samplers, including DPM [38] and PLMS [113]. The quantitative comparisons are presented in Table X, with corresponding visual results shown in Fig. 14. To ensure a comprehensive comparison, we also adopted two non-reference metrics, namely CLIPIQA [106] and MUSIQ [107], in Table X. These results clearly indicate that even with the advanced DPM algorithm, LDM [25] still obviously underperforms compared to the proposed ResShiftL. While the use of the PLMS algorithm shows notable improvements in non-reference metrics, it compromises fidelity and introduces noticeable artifacts, as illustrated by the qualitative results in Fig. 14. Considering the high requirement on the fidelity of IR, our method proves to be more suitable for solving IR tasks.
+3) Limitation: Albeit its overall strong performance, the proposed method occasionally exhibits failures. One such instance is illustrated in Fig. 12, where it cannot produce satisfactory results for a severely degraded comic image. It should be noted (a) Zoomed LR (b) LDM-DDIM-4 (c) LDM-DPM-4 (d) LDM-PLMS-4 (e) ResShiftL-4 (f) Ground Truth
+Fig. 14. Qualitative comparison of the proposed ResShiftL and LDM with various accelerated sampling algorithms on the dataset of ImageNet-Test for image super-resolution. For a fair comparison, we set the diffusion steps as 4 for LDM.
+TABLE XI QUANTITATIVE COMPARISON OF DIFFERENT METHODS ON CelebA-Test DATASET FOR BLIND FACE RESTORATION. THE RESULTS OF THE DIFFUSION-BASED METHODS ARE DENOTED AS “METHOD-A”, WHERE “A” REPRESENTS THE NUMBER OF SAMPLING STEPS. THE BEST AND SECOND BEST RESULTS ARE HIGHLIGHTED IN BOLD AND UNDERLINE.
+Methods Metrics
+PSNR↑
+SSIM↑ LPIPS↓
+IDS↓
+LMD↓ FID-F↓ FID-G↓ DFDNet [118]
+22.97
+0.631
+0.502
+86.32
+20.79
+92.22
+77.10 PSFRGAN [119]
+22.58
+0.628
+0.411
+70.32
+7.19
+65.65
+62.44 GFPGAN [114]
+22.06
+0.629
+0.413
+68.78
+8.64
+49.15
+56.13 RestoreFormer [120]
+22.55
+0.598
+0.423
+65.93
+8.20
+50.76
+53.25 VQFR [121]
+21.80
+0.579
+0.424
+67.62
+8.46
+49.62
+57.12 CodeFormer [115]
+23.58
+0.661
+0.324
+59.14
+5.04
+64.25
+26.65 DifFace-100 [20]
+24.24
+0.702
+0.334
+61.25
+5.13
+52.34
+22.84 ResShift-4
+23.41
+0.671
+0.309
+59.70
+5.05
+52.07
+17.84 that other comparison methods also struggle to address this particular example. This is not an unexpected outcome as most modern image super-resolution (SR) methods are trained on synthetic datasets simulated by manually assumed degradation models [39], [40], which still cannot cover the full range of complicated real degradation types. Therefore, developing a more practical degradation model for SR is an essential avenue for future research.
+C. Experimental Results on Blind Face Restoration 1) Experimental Setup: Training Settings. Our model was trained on the FFHQ dataset [110] that contains 70k high- quality (HQ) face images. We firstly resized the HQ images into a resolution of 512 × 512, and then synthesized the LQ images following a typical degradation model used in recent literature [114]:
+y =
+n [(x ∗kl) ↓s +nσ]JPEGq
+o
+↑s,
+(28) where y and x are the LQ and HQ image, kl is the Gaussian kernel with kernel width l, nσ is Gaussian noise with standard deviation σ, ∗is 2D convolutional operator, ↓s and ↑s are the Bicubic downsampling or upsampling operators with scale s, and [·]JPEGq represents the JPEG compression process with quality factor q. And the hyper-parameters l, s, σ, and q are uniformly sampled from [0.1, 15], [0.8, 32], [0, 20], and [30, 100] respectively. The other training configurations were kept the same as those in image super-resolution.
+Testing Datasets. We evaluate ResShift on one synthetic dataset and three real-world datasets. The synthetic dataset, denoted as CelebA-Test, contains 2,000 HQ images from CelebA-HQ [111], and the corresponding LQ images are synthesized via Eq. (28). As for the real-world datasets, we consider three typical ones with different degrees of degradation, namely LFW, WebPhoto [114], and WIDER [115]. LFW consists of 1711 mildly degraded face images in the wild, which contains one image for each person in LFW dataset [116]. WebPhoto is made up of 407 face images crawled from the internet. Some of them are old photos with severe degradation. WIDER selects 970 face images with very heavy degradation from the WIDER Face dataset [117], it is thus suitable to test the robustness of different methods under severe degradation.
+Compared Methods. We compare ResShift with seven recent BFR methods, including DFDNet [118], PSFRGAN [119], GFPGAN [114], RestoreFormer [120], VQFR [121], CodeFormer [115], and DifFace [20].
+Evaluation Metrics. To comprehensively assess various methods, this study adopts six quantitative metrics following the setting of VQFR [121], namely PSNR, SSIM [122], LPIPS [84], identity score (IDS), landmark distance (LMD), and FID [123]. Note that IDS, also referred to as ”Deg” in certain literature [121], and LMD both serve as quantifiers for the identity between the restored images and their ground truths. IDS gauges the embedding angle of ArcFace [124], while LMD calculates the landmark distance using L2 norm between pairs of images. FID quantifies the KL divergence between the feature distributions, assumed as Gaussian distribution, of the restored images and a high-quality reference dataset. For the reference dataset, we TABLE XII QUANTITATIVE COMPARISON OF DIFFERENT METHODS ON THREE REAL-WORLD DATASETS FOR BLIND FACE RESTORATION. THE RESULTS OF THE DIFFUSION-BASED METHODS ARE DENOTED AS “METHOD-A”, WHERE “A” REPRESENTS THE NUMBER OF SAMPLING STEPS. THE BEST AND SECOND BEST RESULTS ARE HIGHLIGHTED IN BOLD AND UNDERLINE.
+Methods Datasets
+LFW WebPhoto
+WIDER FID-F↓ MUSIQ↑ FID-F↓ MUSIQ↑ FID-F↓ MUSIQ↑ DFDNet [118]
+59.81
+73.11
+92.39
+69.03
+57.85
+63.21 PSFRGAN [119]
+49.65
+73.60
+85.03
+71.67
+49.85
+71.51 GFPGAN [114]
+50.02
+73.57
+87.57
+72.08
+39.46
+72.82 RestoreFormer [120]
+48.50
+73.70
+78.16
+69.84
+49.85
+67.84 VQFR [121]
+44.14
+74.02
+75.38
+72.00
+50.79
+74.74 CodeFormer [115]
+52.43
+75.49
+83.27
+73.99
+38.86
+73.40 DifFace-100 [20]
+45.64
+70.39
+89.99
+66.29
+38.40
+65.99 ResShift-4
+52.40
+70.68
+74.80
+70.90
+38.12
+71.07 TABLE XIII QUANTITATIVE COMPARISON OF DIFFERENT METHODS ON THE TESTING DATASET OF GOPRO FOR IMAGE DEBLURRING. THE RESULTS OF THE DIFFUSION-BASED METHODS ARE DENOTED AS “METHOD-A”, WHERE “A” REPRESENTS THE NUMBER OF SAMPLING STEPS. THE BEST AND SECOND BEST RESULTS ARE HIGHLIGHTED IN BOLD AND UNDERLINE.
+Methods Metrics
+PSNR↑
+SSIM↑ LPIPS ↓
+FID↓ NIQE ↓ DeblurGAN-v2 [3]
+29.08 0.8766 0.1173
+14.33
+4.940 MIMO-UNet+ [125]
+32.44 0.9333 0.0905
+19.96
+5.563 MPRNet [126]
+32.66 0.9363 0.0886
+22.00
+5.653 Uformer [67]
+33.05 0.9418 0.0868
+22.05
+5.668 Restormer [66]
+32.92 0.9399 0.0841
+21.21
+5.683 DiffIR-4 [27]
+33.31 0.9446 0.0787
+20.93
+5.674 ResShiftL-4
+29.47 0.8856 0.0720
+9.39
+5.194 employ both the ground truth images and the FFHQ [111] dataset. The corresponding results computed under these two settings are denoted as “FID-G” and “FID-F” for clarity. On the real-world datasets, we mainly adopt two no-reference metrics, namely FID-F and MUSIQ [107], since the underlying ground truth images are unavailable.
+2) Evaluation on Synthetic Dataset: We present the comparative results on CelebA-Test in Table XI. The proposed ResShift demonstrates superior performance, particularly in terms of LPIPS and FID-G, indicating the heightened alignment of its restored results with the perceptual system of humans. Regarding the identity-related metrics, namely LMD and IDS, our method attains the second-best rankings, substantiating its powerful capability for identity preservation. Furthermore, our method exhibits, at a minimum, comparable performance to recent state-of-the-art (SotA) techniques across other evaluated metrics. In summary, our proposed method manifests commendable and consistent proficiency in blind face restoration.
+For visualization, four typical examples of the CelebA-Test are displayed in Fig. 16. In the first and second examples with mild degradation, most of the comparison methods can restore a realistic-looking image. When confronted with more severe degradation as shown in the third and fourth examples, only CodeFormer [115], DifFace [20], and ResShift can handle such cases, yielding satisfactory facial images. However, the results of CodeFormer still contain some slight artifacts in specific areas, such as hair, as highlighted by red arrows in Fig. 16). As for DifFace, it needs 100 sampling steps, largely limiting its efficiency. In contrast, the proposed ResShift not only requires much fewer diffusion steps, i.e., 4 steps, but also performs more stably under this challenging degradation setting.
+3) Evaluation on Real-world Dataset: The comparative results on three real-world datasets are summarized in Table XII.
+We can observe that ResShift surpasses its counterparts with regard to the metric of FID-F, while maintaining comparability with recent SotA methodologies in terms of MUSIQ. To supplement the analysis, we show several typical examples of these datasets in Fig. 17. It is observed that all the comparison approaches perform well on the dataset LFW with slight degradation.
+However, ResShift provides significantly better results on the other two datasets where the LQ images are severely degraded.
+This stable performance of ResShift is consistent with the evaluation metric of FID-F, mainly owing to the powerful capability of the designed diffusion model.
+D. Experimental Results on Image Deblurring 1) Experimental Setup: We train ResShiftL on the GoPro [127] dataset and evaluate its performance on the testing dataset of GoPro following recent work [82]. For a comprehensive evaluation, we employed both distortion metrics, including PSNR and SSIM [122], as well as perceptual metrics, namely LPIPS [84], FID [123], and NIQE [128]. Note that the FID score was computed at the patch level by extracting non-overlapping patches of size 256 × 240 from each 1280 × 720 source image, as recommended by [4] to obtain a stable evaluation. We compared our approach against six SotA methods: DeblurGAN-v2 [3], MIMO-Unet+ [125], MPRNet [126], Uformer [67], Restormer [66], and DiffIR [27].
+(a) LQ (e) Uformer (i) Ground Truth (d) MPRNet (h) ResShiftL-4 (c) MIMO-UNet+ (g) DiffIR-4 (b) DeblurGANv2 (f) Restormer (a) LQ (e) Uformer (i) Ground Truth (d) MPRNet (h) ResShiftL-4 (c) MIMO-UNet+ (g) DiffIR-4 (b) DeblurGANv2 (f) Restormer (a) LQ (e) Uformer (i) Ground Truth (d) MPRNet (h) ResShiftL-4 (c) MIMO-UNet+ (g) DiffIR-4 (b) DeblurGANv2 (f) Restormer
+Fig. 15. Qualitative results of different methods on the GoPro testing dataset for image deblurring. We annotate the diffusion-based methods with the format of “Method-A”, where “A” represents the number of sampling steps. Please zoom in for a better view.
+2) Experimental Results: Table XIII presents a comparative analysis of various methods evaluated on the GoPro [127] testing dataset. The results indicate that the proposed ResShiftL demonstrates superior performance with respect to perceptual metrics, in particular of LPIPS and FID. This suggests that ResShiftL aligns more closely with human visual perception.
+Additionally, the visual evidence provided in Fig. 15 further proves the perceptual advantages of our approach. However, in terms of distortion metrics, such as PSNR and SSIM, our method performs less favorably compared to existing methods.
+This is mainly because ResShiftL is implemented in the latent space of VQGAN, which is compressed by a factor of 8.
+The transformation between the pixel space and latent space inevitably results in some information loss, thus limiting the performance of our method regarding distortion metrics.
+(j) Ground Truth (g) CodeFormer (j) Ground Truth (g) CodeFormer (j) Ground Truth (g) CodeFormer (a) LQ (a) LQ (a) LQ (a) LQ (j) Ground Truth (g) CodeFormer (b) DFDNet (b) DFDNet (b) DFDNet (b) DFDNet (c) PSFRGAN (c) PSFRGAN (c) PSFRGAN (c) PSFRGAN (d) GFPGAN (d) GFPGAN (d) GFPGAN (d) GFPGAN (e) RestoreFormer (h) DifFace-100 (e) RestoreFormer (h) DifFace-100 (e) RestoreFormer (h) DifFace-100 (e) RestoreFormer (h) DifFace-100 (f) VQFR (i) ResShiftL-4 (f) VQFR (i) ResShiftL-4 (f) VQFR (i) ResShiftL-4 (f) VQFR (i) ResShiftL-4
+Fig. 16. Qualitative results of different methods on the synthetic CelebA-Test dataset for blind face restoration. We annotate the diffusion-based methods with the format of “Method-A”, where “A” represents the number of sampling steps. Please zoom in for a better view.
+LFW WebPhoto
+WIDER (a) LQ (b) DFDNet (c) PSFRGAN (d) GFPGAN (g) CodeFormer (h) DifFace-100 (f) RestoreFormer (e) VQFR (i) ResShiftL-4
+Fig. 17. Qualitative results of different methods on three real-world datasets for blind face restoration. We annotate the diffusion-based methods with the format of “Method-A”, where “A” represents the number of sampling steps. Please zoom in for a better view.
+(a) Zoomed LQ (a) Zoomed LQ (h) Ground Truth (h) Ground Truth (s) ResShift-15 (f) SwinIR (f) SwinIR (m) StableSR-15 (m) StableSR-15 (s) ResShift-15 (t) ResShiftL-4 (g) DASR (g) DASR (n) StableSR-4 (n) StableSR-4 (t) ResShiftL-4 (b) RealSR-JPEG (b) RealSR-JPEG (i) LDM-50 (o) CCSR-50 (i) LDM-50 (o) CCSR-50 (j) LDM-15 (j) LDM-15 (c) ESRGAN (c) ESRGAN (p) CCSR-15 (p) CCSR-15 (k) LDM-4 (k) LDM-4 (d) BSRGAN (d) BSRGAN (q) CCSR-4 (q) CCSR-4 (e) RealESRGAN (e) RealESRGAN (l) StableSR-50 (r) DiffIR-4 (l) StableSR-15 (r) DiffIR-4
+Fig. 18. Qualitative results of different methods on the synthetic ImageNet-Test dataset for image super-resolution. Please zoom in for a better view.
+(a) LQ Image (l) ResShift-15 (m) ResShiftL-4 (a) LQ Image (e) LDM-15 (j) LDM-4 (e) LDM-15 (j) LDM-4 (f) StableSR-15 (k) StableSR-4 (f) StableSR-15 (k) StableSR-4 (l) ResShift-15 (m) ResShiftL-4 (b) RealESRGAN (g) BSRGAN (b) RealESRGAN (g) BSRGAN (c) SwinIR (h) DiffIR-4 (c) SwinIR (h) DiffIR-4 (i) CCSR-4 (d) CCSR-15 (i) CCSR-4 (d) CCSR-15
+Fig. 19. Qualitative comparisons on two real-world examples from RealSet80. Please zoom in for a better view.
+(a) LQ Image (j) ResShiftL-4 (b) BSRGAN (c) RealESRGAN (h) ResShiftL-4 (d) SwinIR (i) ResShiftL-4 (e) LDM-4 (j) ResShiftL-4 (f) StableSR-4 (k) ResShiftL-4
+Fig. 20. Visual analysis of the sampling randomness. (a) LQ image, (b)-(f) restored images by recent state-of-the-art methods, (j)-(k) restored results by our proposed method under different random seeds.
+LQ Image LQ Image ResShift-15 RealESRGAN BSRGAN SwinIR CCSR-15 CCSR-50 CCSR-100 CCSR-200 StableSR-200 StableSR-100 StableSR-50 StableSR-15 LDM-200 LDM-100 LDM-50 LDM-15 ResShift-15 RealESRGAN BSRGAN SwinIR CCSR-15 CCSR-50 CCSR-100 CCSR-200 StableSR-200 StableSR-100 StableSR-50 StableSR-15
+LDM-4 StableSR-4 ResShiftL-4 CCSR-4 ResShiftL-4 CCSR-4 StableSR-4
+LDM-4 LDM-200 LDM-100 LDM-50 LDM-15
+Fig. 21. Qualitative comparisons on two real-world examples from RealSet80. For the diffusion-based methods, we display the results with different sampling steps, ranging from 4 to 200. Please zoom in for a better view.
+LQ Image (240 x 240) ResShiftL (960 x 960) ResShiftL (1024 x 1024) LQ Image (256 x 256)
+Fig. 22. Super-resolution results of the proposed ResShiftL on two real-world examples with heavy degradation from RealSet80. Top row: x4 super-resolution from 240 × 240 to 960 × 960. Bottom row: x4 super-resolution from 256 × 256 to 1024 × 1024. Please zoom in for a better view.
+LQ Image (448 x 640) ResShiftL (1792 x 2560) ResShiftL (2368 x 3200) LQ Image (592 x 800)
+Fig. 23. Super-resolution results of the proposed ResShiftL on two real-world examples with slight degradation from RealSet80. Top row: x4 super-resolution from 448 × 640 to 1792 × 2560. Bottom row: x4 super-resolution from 592 × 800 to 2368 × 3200. Please zoom in for a better view.
+LQ Image (1024 x 1024) ResShiftL (4096 x 4096) LQ Image (1024 x 1024) ResShiftL (4096 x 4096)
+Fig. 24. Super-resolution results (x4, 1024 × 1024 →4096 × 4096) of the proposed ResShiftL on two synthesized examples by SDXL-Turbo. Please zoom in for a better view.
+ResBlock Swin Transformer Downsample Upsample LayerNorm
+MSA LayerNorm
+MLP (a) Unet (b) Swin Transformer
+Fig. 25. Illustration of the network architecture of our method. It is modified from the widely-used diffusion Unet. To better handle the images with various resolutions, we introduce several Swin Transformer blocks, each consisting of LayerNorm, Multi-head Self-Attention (MSA), and MLP.

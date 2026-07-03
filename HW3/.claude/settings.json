@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python skill_builder.py --output skill.md)",
+      "Bash(.venv/Scripts/python data_update.py --rebuild)"
+    ]
+  }
+}

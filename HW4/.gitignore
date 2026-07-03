@@ -1,0 +1,45 @@
+# From classroom template
+__pycache__/
+*.pyc
+.env
+.venv/
+node_modules/
+# 執行時產生的記憶檔，不要 commit
+.pi-memory.json
+memory.json
+
+# Extras (added by student)
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# Env / secrets — NEVER commit
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# Memory persistence files
+pi-memory.json
+.pi-memory-*.tmp
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Build artifacts
+*.egg-info/
+build/
+dist/
+
+# Local model caches
+.cache/

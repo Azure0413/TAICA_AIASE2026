@@ -1,0 +1,26 @@
+# ── Environment ──
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# ── ChromaDB (auto-generated) ──
+chroma_db/
+
+# ── Raw PDF files (total ~383MB, exceeds 50MB git limit) ──
+# processed/ txt files are committed instead
+data/raw/*.pdf
+
+# ── Hash registry (auto-generated) ──
+data/.file_hashes.json
+
+# ── IDE / OS ──
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ── Model cache ──
+*.bin
+*.safetensors
