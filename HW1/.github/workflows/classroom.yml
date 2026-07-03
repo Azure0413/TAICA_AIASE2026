@@ -1,0 +1,55 @@
+name: Autograding Tests
+on:
+  - push
+  - workflow_dispatch
+  - repository_dispatch
+permissions:
+  checks: write
+  actions: read
+  contents: read
+jobs:
+  run-autograding-tests:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-classroom[bot]'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check content.md
+      id: content-check
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: '檔案檢查 (content.md)'
+        setup-command: '' 
+        command: 'if [ ! -f "content.md" ]; then echo "❌ Missing content.md"; exit 1; else echo "✅ Found content.md"; exit 0; fi'
+        timeout: 10
+        max-score: 30
+
+    - name: Check README.md
+      id: readme-check
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: '檔案檢查 (README.md)'
+        setup-command: '' 
+        command: 'if [ ! -f "README.md" ]; then echo "❌ Missing README.md"; exit 1; else echo "✅ Found README.md"; exit 0; fi'
+        timeout: 10
+        max-score: 30
+
+    - name: Check output folder has files
+      id: output-check
+      uses: classroom-resources/autograding-command-grader@v1
+      with:
+        test-name: '檔案檢查 (output 資料夾)'
+        setup-command: '' 
+        command: 'if [ ! -d "output" ]; then echo "❌ Missing output folder"; exit 1; elif [ -z "$(ls -A output)" ]; then echo "❌ output folder is empty"; exit 1; else echo "✅ Found files in output folder"; exit 0; fi'
+        timeout: 10
+        max-score: 40
+
+    - name: Autograding Reporter
+      uses: classroom-resources/autograding-grading-reporter@v1
+      env:
+        CONTENT-CHECK_RESULTS: "${{ steps.content-check.outputs.result }}"
+        README-CHECK_RESULTS: "${{ steps.readme-check.outputs.result }}"
+        OUTPUT-CHECK_RESULTS: "${{ steps.output-check.outputs.result }}"
+      with:
+        runners: content-check,readme-check,output-check

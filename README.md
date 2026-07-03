@@ -172,7 +172,7 @@ flowchart TD
     G --> H[decay / last_used_at]
     H --> I[build_injection]
     I --> J[Pi before_agent_start]
-    K[/recall / /forget commands] --> L[memory.cli]
+    K["/recall and /forget commands"] --> L[memory.cli]
     L --> D
 ```
 

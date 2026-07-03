@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="奇美醫療財團法人奇美醫院 × 國立成功大學資訊工程學系" />
+  <title>EHPTS 提案計畫書</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({startOnLoad:true, theme:'default'});</script>
+  <style>
+    body { max-width: 960px; margin: 0 auto; padding: 32px; font-family: sans-serif; }
+    .mermaid { text-align: center; margin: 24px 0; }
+  </style>
+  <script defer=""
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js"
+  type="text/javascript"></script>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">EHPTS 提案計畫書</h1>
+<p class="author">奇美醫療財團法人奇美醫院 ×
+國立成功大學資訊工程學系</p>
+<p class="date">2026 年 3 月</p>
+</header>
+<h1
+id="智慧老人醫院病患分流預測系統-提案計畫書">智慧老人醫院病患分流預測系統
+— 提案計畫書</h1>
+<blockquote>
+<p><strong>專案名稱：</strong> Elderly Hospital Patient Triage
+Prediction System (EHPTS) <strong>版本：</strong> v1.0.0 ｜
+<strong>狀態：</strong> 提案階段 <strong>提案單位：</strong>
+奇美醫療財團法人奇美醫院 × 國立成功大學資訊工程學系
+<strong>提案日期：</strong> 2026 年 3 月</p>
+</blockquote>
+<hr />
+<h2 id="目錄">目錄</h2>
+<ol type="1">
+<li><a href="#專案摘要">專案摘要</a></li>
+<li><a href="#背景與問題描述">背景與問題描述</a></li>
+<li><a href="#專案目標">專案目標</a></li>
+<li><a href="#現行分類規則與標籤設計">現行分類規則與標籤設計</a></li>
+<li><a href="#資料概況與探索性分析">資料概況與探索性分析</a></li>
+<li><a href="#分析方法論">分析方法論</a></li>
+<li><a href="#初步分析成果">初步分析成果</a></li>
+<li><a href="#系統架構設計">系統架構設計</a></li>
+<li><a href="#專案時程規劃">專案時程規劃</a></li>
+<li><a href="#預算規劃">預算規劃</a></li>
+<li><a href="#預期效益與風險評估">預期效益與風險評估</a></li>
+<li><a href="#結論與展望">結論與展望</a></li>
+<li><a href="#參考資料">參考資料</a></li>
+</ol>
+<hr />
+<h2 id="專案摘要">專案摘要</h2>
+<p>本計畫旨在建構一套<strong>智慧型病患分流預測系統</strong>，利用機器學習技術與統計分析方法，將醫院住院病患依照臨床特徵自動分類為「<strong>一般醫院</strong>」或「<strong>老人醫院</strong>」兩大群體。目前醫師已依據臨床經驗，制定一套基於
+<em>入院年齡</em>、<em>住院天數</em>、<em>加護病房使用天數</em>
+等指標的規則，將超過十萬筆病患資料完成初步標記。</p>
+<blockquote>
+<p><strong>核心價值：</strong>
+透過深度群體特徵分析，找出兩群體間的<strong>關鍵差異因子</strong>，使未來的分類流程更加快速、精準，並降低醫療資源的錯配率。</p>
+</blockquote>
+<p>本計畫分為三大階段：</p>
+<ol type="1">
+<li><strong>資料前處理與標籤建立</strong>（已完成）</li>
+<li><strong>群體特徵分析與關鍵因子挖掘</strong>（進行中）</li>
+<li><strong>預測模型建構與系統整合</strong>（規劃中）</li>
+</ol>
+<p>最終目標是部署一套可供護理站使用的<strong>即時分流預測服務</strong>，在病患入院登記時即自動給出分流建議，將人工判斷時間從分鐘級壓縮至秒級。</p>
+<hr />
+<h2 id="背景與問題描述">背景與問題描述</h2>
+<h3 id="台灣高齡化趨勢">台灣高齡化趨勢</h3>
+<p>台灣已於 <strong>2018 年</strong>進入高齡社會（65 歲以上人口超過
+14%），預計 <strong>2025 年</strong>邁入超高齡社會（超過
+20%）。根據國家發展委員會的推估，至 <strong>2030
+年</strong>老年人口將達到約 <em>559 萬人</em>，佔總人口的
+<strong>24.1%</strong>。</p>
+<blockquote>
+<p>高齡化不僅是人口統計的數字變化，更是醫療資源配置模式的根本性轉型。</p>
+</blockquote>
+<h3 id="醫療資源分配的挑戰">醫療資源分配的挑戰</h3>
+<p>隨著老年人口急速增長，現有醫療體系面臨以下挑戰：</p>
+<ul>
+<li><strong>病床資源緊張</strong>：急性病床與慢性照護病床的需求比例失衡</li>
+<li><strong>分類效率低下</strong>：目前依賴醫師人工判斷，耗時且一致性不足</li>
+<li><strong>成本持續攀升</strong>：不適當的住院安排導致健保支出浪費
+<ul>
+<li>一般醫院群體平均健保記帳總額約 <strong>165,302 元</strong></li>
+<li>老人醫院群體平均健保記帳總額約 <strong>76,667 元</strong></li>
+<li>兩群體每案差距高達約 <strong>88,635 元</strong></li>
+</ul></li>
+</ul>
+<h3 id="問題陳述">問題陳述</h3>
+<p>目前醫師已根據臨床規則將病患分為兩類，但此分類方式存在以下限制：</p>
+<table>
+<colgroup>
+<col style="width: 62%" />
+<col style="width: 37%" />
+</colgroup>
+<thead>
+<tr>
+<th>問題面向</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>規則剛性</strong></td>
+<td>僅依據少數欄位（年齡、住院天數、加護病房天數），未考量其他潛在特徵</td>
+</tr>
+<tr>
+<td><strong>效率瓶頸</strong></td>
+<td>人工判斷耗時，無法即時處理大量入院案件</td>
+</tr>
+<tr>
+<td><strong>缺乏解釋性</strong></td>
+<td>未能充分理解兩群體間的深層特徵差異</td>
+</tr>
+<tr>
+<td><del>自動化系統</del></td>
+<td>目前尚無自動化分流系統，全仰賴人工流程</td>
+</tr>
+</tbody>
+</table>
+<h3 id="本計畫的定位">本計畫的定位</h3>
+<p>本計畫<strong>並非取代</strong>醫師的臨床判斷，而是在醫師既有規則的基礎上，透過資料科學方法：</p>
+<ol type="1">
+<li><strong>深入理解</strong>兩群體的特徵差異</li>
+<li><strong>量化驗證</strong>現行規則的有效性</li>
+<li><strong>發現</strong>潛在的分流參考因子</li>
+<li><strong>建構</strong>輔助決策的自動化工具</li>
+</ol>
+<hr />
+<h2 id="專案目標">專案目標</h2>
+<h3 id="短期目標3-個月內">短期目標（3 個月內）</h3>
+<ul class="task-list">
+<li><label><input type="checkbox"
+checked="" />完成住院明細資料清洗與標籤建立</label></li>
+<li><label><input type="checkbox" checked="" />完成 42
+個科別的分群交叉統計分析</label></li>
+<li><label><input
+type="checkbox" />完成連續型與類別型特徵的顯著性檢定</label></li>
+<li><label><input type="checkbox" />完成 Random Forest
+特徵重要性排序</label></li>
+</ul>
+<h3 id="中期目標6-個月內">中期目標（6 個月內）</h3>
+<ul class="task-list">
+<li><label><input type="checkbox" />建構預測模型，達成分類準確率 <span
+class="math inline">\(\geq 90\%\)</span></label></li>
+<li><label><input type="checkbox" />開發分流預測 API 服務</label></li>
+<li><label><input type="checkbox" />完成前端儀表板原型設計</label></li>
+</ul>
+<h3 id="長期目標12-個月內">長期目標（12 個月內）</h3>
+<ul class="task-list">
+<li><label><input type="checkbox" />系統正式上線，完成與醫院 HIS
+系統介接</label></li>
+<li><label><input
+type="checkbox" />累積運行數據，持續優化模型效能</label></li>
+<li><label><input type="checkbox" />擴展至多院區協作部署</label></li>
+</ul>
+<hr />
+<h2 id="現行分類規則與標籤設計">現行分類規則與標籤設計</h2>
+<h3 id="標籤定義">標籤定義</h3>
+<p>醫師團隊制定的分群標籤定義如下：</p>
+<ul>
+<li><code>hospital_label = 0</code>：<strong>一般醫院</strong>患者（General
+Hospital）— 需要急重症或高強度醫療服務</li>
+<li><code>hospital_label = 1</code>：<strong>老人醫院</strong>患者（Elderly
+Hospital）— 適合標準化、穩定性照護服務</li>
+</ul>
+<h3 id="分類規則流程">分類規則流程</h3>
+<p>分類邏輯依照<strong>優先順序</strong>判定，整體決策流程如下：</p>
+<div class="mermaid">
+flowchart TD
+    A["📋 Input: Patient Record"] --> B{"Age < 50?"}
+    B -- "Yes" --> C["Label = 0\nGeneral Hospital"]
+    B -- "No" --> D{"TwDRGs Note\nin 2-9?"}
+    D -- "Yes" --> C
+    D -- "No" --> E{"Any condition\nmet?"}
+    E -- "LOS ≤ 7d\nOR Trial plan\nOR ICU ≤ 3d" --> I["Label = 1\nElderly Hospital"]
+    E -- "None met" --> C
+
+    style A fill:#4A90D9,stroke:#2C3E50,color:#fff
+    style B fill:#F8F9FA,stroke:#6C757D,color:#333
+    style C fill:#5CB85C,stroke:#2C3E50,color:#fff
+    style D fill:#F8F9FA,stroke:#6C757D,color:#333
+    style E fill:#F8F9FA,stroke:#6C757D,color:#333
+    style I fill:#F0AD4E,stroke:#2C3E50,color:#fff
+</div>
+<h3 id="規則核心程式碼">規則核心程式碼</h3>
+<p>以下為建立分群標籤的關鍵 Python 函式片段：</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> create_hospital_label(df: pd.DataFrame) <span class="op">-&gt;</span> pd.DataFrame:</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Create hospital_label column.</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">      0 = General Hospital</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co">      1 = Elderly Hospital</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co">    Priority rules:</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co">      P1: age &lt; 50         -&gt; force label 0</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co">      P2: TwDRGs note 2-9  -&gt; force label 0</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co">      Otherwise: any condition met -&gt; label 1</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    df[<span class="st">&quot;hospital_label&quot;</span>] <span class="op">=</span> <span class="dv">0</span>  <span class="co"># default: general hospital</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Priority filters — force label 0</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    age_lt_50 <span class="op">=</span> (df[<span class="st">&quot;age&quot;</span>] <span class="op">&gt;=</span> <span class="dv">0</span>) <span class="op">&amp;</span> (df[<span class="st">&quot;age&quot;</span>] <span class="op">&lt;</span> <span class="dv">50</span>)</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    twdrgs_sp <span class="op">=</span> df[<span class="st">&quot;twdrgs_note&quot;</span>].<span class="bu">apply</span>(is_special_twdrgs)</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    priority <span class="op">=</span> age_lt_50 <span class="op">|</span> twdrgs_sp</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Condition filters — assign label 1 if any met</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    c1 <span class="op">=</span> df[<span class="st">&quot;length_of_stay&quot;</span>] <span class="op">&lt;=</span> <span class="dv">7</span>   <span class="co"># LOS ≤ 7 days</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    c2 <span class="op">=</span> df[<span class="st">&quot;trial_plan&quot;</span>].notna()     <span class="co"># trial plan exists</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    c3 <span class="op">=</span> df[<span class="st">&quot;icu_days&quot;</span>] <span class="op">&lt;=</span> <span class="dv">3</span>          <span class="co"># ICU days ≤ 3</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    any_cond <span class="op">=</span> c1 <span class="op">|</span> c2 <span class="op">|</span> c3</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>    df.loc[<span class="op">~</span>priority <span class="op">&amp;</span> any_cond, <span class="st">&quot;hospital_label&quot;</span>] <span class="op">=</span> <span class="dv">1</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> df</span></code></pre></div>
+<h3 id="標籤分佈統計">標籤分佈統計</h3>
+<p>兩種不同條件嚴格度下的標籤分佈對比：</p>
+<table>
+<thead>
+<tr>
+<th>規則版本</th>
+<th style="text-align: right;">Label 0（一般）</th>
+<th style="text-align: right;">Label 1（老人）</th>
+<th style="text-align: right;">總筆數</th>
+<th style="text-align: left;">Label 1 佔比</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>任一條件成立版</strong></td>
+<td style="text-align: right;">6,117</td>
+<td style="text-align: right;">42,460</td>
+<td style="text-align: right;">48,577</td>
+<td style="text-align: left;"><strong>87.41%</strong></td>
+</tr>
+<tr>
+<td><strong>全部條件成立版</strong></td>
+<td style="text-align: right;">48,423</td>
+<td style="text-align: right;">154</td>
+<td style="text-align: right;">48,577</td>
+<td style="text-align: left;"><strong>0.32%</strong></td>
+</tr>
+<tr>
+<td><strong>正式分析版本</strong></td>
+<td style="text-align: right;">39,781</td>
+<td style="text-align: right;">69,820</td>
+<td style="text-align: right;">109,601</td>
+<td style="text-align: left;"><strong>63.7%</strong></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>注意：</strong>
+條件嚴格度的選擇對分群結果有<strong>極端影響</strong> — 從 87.4% 到
+0.3%，凸顯了閾值設計在醫療決策系統中的重要性。</p>
+</blockquote>
+<hr />
+<h2 id="資料概況與探索性分析">資料概況與探索性分析</h2>
+<h3 id="資料集基本資訊">資料集基本資訊</h3>
+<p>本計畫使用近三年（2023–2025）的住院明細資料，基本統計如下：</p>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th style="text-align: right;">數值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>總樣本數 <span class="math inline">\(N\)</span></td>
+<td style="text-align: right;">109,601</td>
+</tr>
+<tr>
+<td>Group 0（一般醫院）</td>
+<td style="text-align: right;">39,781 筆（36.3%）</td>
+</tr>
+<tr>
+<td>Group 1（老人醫院）</td>
+<td style="text-align: right;">69,820 筆（63.7%）</td>
+</tr>
+<tr>
+<td>連續型特徵數</td>
+<td style="text-align: right;">30</td>
+</tr>
+<tr>
+<td>類別型特徵數</td>
+<td style="text-align: right;">23</td>
+</tr>
+<tr>
+<td>涵蓋科別數</td>
+<td style="text-align: right;">42</td>
+</tr>
+</tbody>
+</table>
+<h3 id="兩群體基本特徵對比">兩群體基本特徵對比</h3>
+<p>以下表格呈現兩群體在核心臨床指標上的差異（金額單位：新台幣元）：</p>
+<table>
+<thead>
+<tr>
+<th>特徵指標</th>
+<th style="text-align: right;">Group 0（一般醫院）</th>
+<th style="text-align: right;">Group 1（老人醫院）</th>
+<th style="text-align: center;">差異倍數</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>平均入院年齡</td>
+<td style="text-align: right;">42.0 歲</td>
+<td style="text-align: right;"><strong>67.9 歲</strong></td>
+<td style="text-align: center;">1.6x</td>
+</tr>
+<tr>
+<td>平均住院天數</td>
+<td style="text-align: right;"><strong>11.5 天</strong></td>
+<td style="text-align: right;">5.4 天</td>
+<td style="text-align: center;">2.1x</td>
+</tr>
+<tr>
+<td>平均 ICU 天數</td>
+<td style="text-align: right;"><strong>2.62 天</strong></td>
+<td style="text-align: right;">0.12 天</td>
+<td style="text-align: center;">21.8x</td>
+</tr>
+<tr>
+<td>平均健保記帳總額</td>
+<td style="text-align: right;"><strong>165,302</strong></td>
+<td style="text-align: right;">76,667</td>
+<td style="text-align: center;">2.2x</td>
+</tr>
+<tr>
+<td>平均診察費</td>
+<td style="text-align: right;"><strong>9,703</strong></td>
+<td style="text-align: right;">3,926</td>
+<td style="text-align: center;">2.5x</td>
+</tr>
+<tr>
+<td>平均病房費</td>
+<td style="text-align: right;"><strong>25,131</strong></td>
+<td style="text-align: right;">9,128</td>
+<td style="text-align: center;">2.8x</td>
+</tr>
+</tbody>
+</table>
+<h3 id="科別分佈概況">科別分佈概況</h3>
+<p>全院 <strong>42
+個科別</strong>的分群標籤分佈呈現高度異質性。部分科別幾乎全數歸類為老人醫院群體，另一些科別則以一般醫院群體為主。以老人醫院佔比排序，前五大科別為：</p>
+<ol type="1">
+<li>科別 <strong>31</strong> — 老人醫院比例最高，住院量約 5,000 筆</li>
+<li>科別 <strong>40</strong> — 老人醫院比例次高</li>
+<li>科別 <strong>02</strong> — 樣本量大且老人醫院佔比顯著</li>
+<li>科別 <strong>03</strong> — 全院樣本量最大（約 9,000
+筆），老人醫院比例高</li>
+<li>科別 <strong>04</strong> — 老人醫院比例同樣突出</li>
+</ol>
+<blockquote>
+<p>科別層級的差異分析顯示，<strong>病患的出院科別</strong>本身就是一個強力的分群特徵（Cramer’s
+V = 0.383），具有中等以上的關聯強度。</p>
+</blockquote>
+<h3 id="群體特徵差異的數學定義">群體特徵差異的數學定義</h3>
+<p>為嚴謹量化兩群體的差異程度，本計畫使用以下效應量指標：</p>
+<p><strong>連續型特徵 — Cohen’s
+<em>d</em>（衡量兩組平均值差異的標準化指標）：</strong></p>
+<p><span class="math display">\[d = \frac{\bar{X}_1 -
+\bar{X}_0}{S_p}\]</span></p>
+<p>其中 pooled standard deviation 的計算方式為：</p>
+<p><span class="math display">\[S_p = \sqrt{ \frac{(n_1 - 1) s_1^2 +
+(n_0 - 1) s_0^2}{n_1 + n_0 - 2} }\]</span></p>
+<p><strong>類別型特徵 — Cramer’s
+<em>V</em>（衡量兩個類別變數間的關聯強度）：</strong></p>
+<p><span class="math display">\[V = \sqrt{ \frac{\chi^2}{n \cdot
+(\min(r, c) - 1)} }\]</span></p>
+<p>其中 <span class="math inline">\(r\)</span> 和 <span
+class="math inline">\(c\)</span> 分別為列聯表的行數和列數，<span
+class="math inline">\(\chi^2\)</span> 為卡方統計量，<span
+class="math inline">\(n\)</span> 為總樣本數。</p>
+<p><strong>效應量判讀標準：</strong></p>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th style="text-align: center;">小效應</th>
+<th style="text-align: center;">中效應</th>
+<th style="text-align: center;">大效應</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cohen’s <em>d</em></td>
+<td style="text-align: center;">0.2</td>
+<td style="text-align: center;">0.5</td>
+<td style="text-align: center;">0.8</td>
+</tr>
+<tr>
+<td>Cramer’s <em>V</em></td>
+<td style="text-align: center;">0.1</td>
+<td style="text-align: center;">0.3</td>
+<td style="text-align: center;">0.5</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="分析方法論">分析方法論</h2>
+<h3 id="整體分析流程">整體分析流程</h3>
+<p>本計畫採用<strong>四階段遞進式分析</strong>策略：</p>
+<div class="mermaid">
+graph LR
+    A["🔧 Phase 1\nPreprocessing"] --> B["📊 Phase 2\nEDA"]
+    B --> C["📐 Phase 3\nStatistical Tests"]
+    C --> D["🤖 Phase 4\nML Modeling"]
+
+    style A fill:#3498DB,stroke:#2C3E50,color:#fff
+    style B fill:#2ECC71,stroke:#2C3E50,color:#fff
+    style C fill:#E67E22,stroke:#2C3E50,color:#fff
+    style D fill:#9B59B6,stroke:#2C3E50,color:#fff
+</div>
+<h3 id="各階段詳細步驟">各階段詳細步驟</h3>
+<h4 id="階段一資料前處理">階段一：資料前處理</h4>
+<ol type="1">
+<li><strong>資料載入</strong>：從醫院資訊系統匯出近三年住院明細原始資料</li>
+<li><strong>欄位清洗</strong>：
+<ul>
+<li>將缺失值統一填補為 <code>-1</code> 標記</li>
+<li>數值型欄位以安全轉換函式處理</li>
+<li>字串型欄位去除前後空白</li>
+</ul></li>
+<li><strong>標籤建立</strong>：依照分類規則建立分群標籤</li>
+<li><strong>資料品質驗證</strong>：確認標籤分佈合理、無重複記錄</li>
+</ol>
+<h4 id="階段二探索性分析eda">階段二：探索性分析（EDA）</h4>
+<ul>
+<li>各欄位分佈視覺化（直方圖、箱形圖）</li>
+<li>科別交叉統計（行內比例分析）</li>
+<li>缺失值比例分析</li>
+<li>異常值偵測（IQR 法則）</li>
+</ul>
+<h4 id="階段三統計檢定">階段三：統計檢定</h4>
+<p>針對兩群體進行雙重顯著性差異檢定：</p>
+<table>
+<colgroup>
+<col style="width: 18%" />
+<col style="width: 18%" />
+<col style="width: 22%" />
+<col style="width: 22%" />
+<col style="width: 18%" />
+</colgroup>
+<thead>
+<tr>
+<th>特徵類型</th>
+<th>參數檢定</th>
+<th>無母數檢定</th>
+<th>效應量指標</th>
+<th>顯著水準</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>連續型</td>
+<td>Independent <em>t</em>-test</td>
+<td>Mann-Whitney <em>U</em> test</td>
+<td>Cohen’s <em>d</em></td>
+<td><span class="math inline">\(\alpha = 0.05\)</span></td>
+</tr>
+<tr>
+<td>類別型</td>
+<td>Chi-squared test (<span class="math inline">\(\chi^2\)</span>)</td>
+<td>—</td>
+<td>Cramer’s <em>V</em></td>
+<td><span class="math inline">\(\alpha = 0.05\)</span></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>同時使用參數與無母數檢定，可確保在資料不符常態分佈假設時，結論仍然穩健。</p>
+</blockquote>
+<h4 id="階段四機器學習建模">階段四：機器學習建模</h4>
+<ul>
+<li><strong>模型選擇</strong>：Random Forest Classifier</li>
+<li><strong>目的</strong>：量化各特徵對分群的<strong>重要性排序</strong>，而非單純追求預測準確率</li>
+<li><strong>超參數</strong>：<code>n_estimators=100</code>、<code>max_depth=None</code>、<code>random_state=42</code></li>
+<li><strong>交叉驗證</strong>：5-fold Stratified Cross-Validation</li>
+<li><strong>評估指標</strong>：<code>accuracy</code>、<code>precision</code>、<code>recall</code>、<code>F1-score</code>、<code>AUC-ROC</code></li>
+</ul>
+<h3 id="技術堆疊">技術堆疊</h3>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">Language</span><span class="kw">:</span><span class="at">    Python 3.10+</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">Core Libraries</span><span class="kw">:</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> pandas &gt;= 2.0</span><span class="co">        # data processing</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> numpy &gt;= 1.24</span><span class="co">        # numerical computation</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> scikit-learn &gt;= 1.3</span><span class="co">   # machine learning</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> scipy &gt;= 1.11</span><span class="co">        # statistical tests</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> matplotlib &gt;= 3.7</span><span class="co">    # static visualization</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> seaborn &gt;= 0.12</span><span class="co">      # statistical visualization</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> openpyxl &gt;= 3.1</span><span class="co">      # Excel I/O</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="fu">IDE</span><span class="kw">:</span><span class="at">         Jupyter Notebook / VS Code</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="fu">VCS</span><span class="kw">:</span><span class="at">         Git + GitHub</span></span></code></pre></div>
+<hr />
+<h2 id="初步分析成果">初步分析成果</h2>
+<h3 id="顯著差異特徵摘要">顯著差異特徵摘要</h3>
+<p>經過完整統計檢定後，共篩選出 <strong>3
+個</strong>連續型顯著差異特徵和 <strong>5
+個</strong>類別型顯著差異特徵（以中等以上效應量為門檻）。</p>
+<h4 id="連續型特徵cohens-d-達中等以上">連續型特徵（Cohen’s <em>d</em>
+達中等以上）</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">排名</th>
+<th>特徵名稱</th>
+<th style="text-align: center;">Cohen’s <em>d</em></th>
+<th>效應量等級</th>
+<th style="text-align: center;"><em>p</em>-value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">1</td>
+<td><strong>入院年齡</strong></td>
+<td style="text-align: center;"><strong>-1.686</strong></td>
+<td>Large</td>
+<td style="text-align: center;">&lt; 0.0001</td>
+</tr>
+<tr>
+<td style="text-align: center;">2</td>
+<td><strong>住院天數</strong></td>
+<td style="text-align: center;">0.513</td>
+<td>Medium</td>
+<td style="text-align: center;">&lt; 0.0001</td>
+</tr>
+<tr>
+<td style="text-align: center;">3</td>
+<td><strong>診察費</strong></td>
+<td style="text-align: center;">0.500</td>
+<td>Medium</td>
+<td style="text-align: center;">&lt; 0.0001</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>入院年齡的效應量 <span class="math inline">\(|d| = 1.686\)</span>
+遠超大效應門檻（0.8），為兩群體間最具區辨力的連續型特徵。</p>
+</blockquote>
+<h4 id="類別型特徵cramers-v-達中等以上">類別型特徵（Cramer’s <em>V</em>
+達中等以上）</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">排名</th>
+<th>特徵名稱</th>
+<th style="text-align: center;">Cramer’s <em>V</em></th>
+<th style="text-align: center;"><em>p</em>-value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">1</td>
+<td><strong>TwDRGs 案件特殊註記</strong></td>
+<td style="text-align: center;"><strong>0.476</strong></td>
+<td style="text-align: center;">&lt; 0.0001</td>
+</tr>
+<tr>
+<td style="text-align: center;">2</td>
+<td><strong>出院醫師代碼</strong></td>
+<td style="text-align: center;">0.438</td>
+<td style="text-align: center;">&lt; 0.0001</td>
+</tr>
+<tr>
+<td style="text-align: center;">3</td>
+<td><strong>出院護理站</strong></td>
+<td style="text-align: center;">0.419</td>
+<td style="text-align: center;">&lt; 0.0001</td>
+</tr>
+<tr>
+<td style="text-align: center;">4</td>
+<td><strong>出院科別代碼</strong></td>
+<td style="text-align: center;">0.383</td>
+<td style="text-align: center;">&lt; 0.0001</td>
+</tr>
+<tr>
+<td style="text-align: center;">5</td>
+<td><strong>科別</strong></td>
+<td style="text-align: center;">0.338</td>
+<td style="text-align: center;">&lt; 0.0001</td>
+</tr>
+</tbody>
+</table>
+<h3 id="random-forest-特徵重要性-top-10">Random Forest 特徵重要性 Top
+10</h3>
+<p>透過 Random Forest 模型量化各特徵的分群貢獻度：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">排名</th>
+<th>特徵名稱</th>
+<th style="text-align: center;">重要性分數</th>
+<th>佔比</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">1</td>
+<td><strong>入院年齡</strong></td>
+<td style="text-align: center;">0.5478</td>
+<td>54.8%</td>
+</tr>
+<tr>
+<td style="text-align: center;">2</td>
+<td>加護病房天數</td>
+<td style="text-align: center;">0.0461</td>
+<td>4.6%</td>
+</tr>
+<tr>
+<td style="text-align: center;">3</td>
+<td>病患來源</td>
+<td style="text-align: center;">0.0356</td>
+<td>3.6%</td>
+</tr>
+<tr>
+<td style="text-align: center;">4</td>
+<td>出院護理站</td>
+<td style="text-align: center;">0.0350</td>
+<td>3.5%</td>
+</tr>
+<tr>
+<td style="text-align: center;">5</td>
+<td>病房費</td>
+<td style="text-align: center;">0.0328</td>
+<td>3.3%</td>
+</tr>
+<tr>
+<td style="text-align: center;">6</td>
+<td>診察費</td>
+<td style="text-align: center;">0.0324</td>
+<td>3.2%</td>
+</tr>
+<tr>
+<td style="text-align: center;">7</td>
+<td>TwDRGs 特殊註記</td>
+<td style="text-align: center;">0.0280</td>
+<td>2.8%</td>
+</tr>
+<tr>
+<td style="text-align: center;">8</td>
+<td>出院科別代碼</td>
+<td style="text-align: center;">0.0253</td>
+<td>2.5%</td>
+</tr>
+<tr>
+<td style="text-align: center;">9</td>
+<td>給別</td>
+<td style="text-align: center;">0.0240</td>
+<td>2.4%</td>
+</tr>
+<tr>
+<td style="text-align: center;">10</td>
+<td>住院天數</td>
+<td style="text-align: center;">0.0238</td>
+<td>2.4%</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>關鍵發現</strong>：入院年齡單一特徵的重要性高達
+<strong>54.78%</strong>，是第二名（加護病房天數 4.61%）的 <strong>11.9
+倍</strong>。這意味著年齡是決定病患歸屬的壓倒性因子，但同時也暗示現行規則可能<strong>過度依賴年齡</strong>，而忽略了其他具潛力的輔助特徵。</p>
+</blockquote>
+<h3 id="群體特徵總結">群體特徵總結</h3>
+<p>兩大群體的核心差異可歸納如下：</p>
+<div class="mermaid">
+mindmap
+  root((群體差異總覽))
+    Group 0 一般醫院
+      較年輕 avg 42 歲
+      住院較長 11.5 天
+      高 ICU 使用 2.62 天
+      高費用 165K NTD
+      急重症傾向
+    Group 1 老人醫院
+      較年長 avg 67.9 歲
+      住院較短 5.4 天
+      低 ICU 使用 0.12 天
+      標準費用 77K NTD
+      穩定照護傾向
+    關鍵區辨因子
+      Age d=1.686
+      LOS d=0.513
+      Exam Fee d=0.500
+      TwDRGs V=0.476
+</div>
+<hr />
+<h2 id="系統架構設計">系統架構設計</h2>
+<h3 id="目標系統概念">目標系統概念</h3>
+<p>本系統設計為一個<strong>三層式架構</strong>的即時分流預測服務：</p>
+<div class="mermaid">
+graph TB
+    subgraph Frontend ["🖥️ Frontend Layer"]
+        A["Nurse Station UI\nNext.js"]
+        B["Triage Dashboard\nRecharts"]
+    end
+
+    subgraph Backend ["⚙️ Backend Service Layer"]
+        C["RESTful API\nFastAPI"]
+        D["Prediction Engine\nRF Model"]
+        E["Rule Engine\nRule-based Filter"]
+    end
+
+    subgraph Data ["💾 Data Storage Layer"]
+        F[("PostgreSQL\nPatient DB")]
+        G[("Redis\nPrediction Cache")]
+        H[("MinIO\nModel Storage")]
+    end
+
+    A --> C
+    B --> C
+    C --> D
+    C --> E
+    D --> F
+    D --> G
+    D --> H
+    E --> F
+
+    style A fill:#5DADE2,stroke:#2C3E50,color:#fff
+    style B fill:#5DADE2,stroke:#2C3E50,color:#fff
+    style C fill:#58D68D,stroke:#2C3E50,color:#fff
+    style D fill:#58D68D,stroke:#2C3E50,color:#fff
+    style E fill:#58D68D,stroke:#2C3E50,color:#fff
+    style F fill:#F4D03F,stroke:#2C3E50,color:#333
+    style G fill:#F4D03F,stroke:#2C3E50,color:#333
+    style H fill:#F4D03F,stroke:#2C3E50,color:#333
+</div>
+<h3 id="預測-api-規格">預測 API 規格</h3>
+<p>系統對外提供的核心 API 端點設計如下：</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;endpoint&quot;</span><span class="fu">:</span> <span class="st">&quot;POST /api/v1/predict&quot;</span><span class="fu">,</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;description&quot;</span><span class="fu">:</span> <span class="st">&quot;Patient triage prediction&quot;</span><span class="fu">,</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;request_body&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;patient_id&quot;</span><span class="fu">:</span> <span class="st">&quot;string&quot;</span><span class="fu">,</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;age&quot;</span><span class="fu">:</span> <span class="st">&quot;integer&quot;</span><span class="fu">,</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;length_of_stay&quot;</span><span class="fu">:</span> <span class="st">&quot;integer&quot;</span><span class="fu">,</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;icu_days&quot;</span><span class="fu">:</span> <span class="st">&quot;integer&quot;</span><span class="fu">,</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;department_code&quot;</span><span class="fu">:</span> <span class="st">&quot;string&quot;</span><span class="fu">,</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;twdrg_note&quot;</span><span class="fu">:</span> <span class="st">&quot;string&quot;</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;response&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;hospital_label&quot;</span><span class="fu">:</span> <span class="st">&quot;0 | 1&quot;</span><span class="fu">,</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;confidence&quot;</span><span class="fu">:</span> <span class="st">&quot;float (0.0 ~ 1.0)&quot;</span><span class="fu">,</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;top_factors&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;age&quot;</span><span class="ot">,</span> <span class="st">&quot;length_of_stay&quot;</span><span class="ot">,</span> <span class="st">&quot;icu_days&quot;</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;rule_based_result&quot;</span><span class="fu">:</span> <span class="st">&quot;0 | 1&quot;</span><span class="fu">,</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;model_based_result&quot;</span><span class="fu">:</span> <span class="st">&quot;0 | 1&quot;</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<h3 id="資料流程">資料流程</h3>
+<p>系統的完整資料處理流程如下：</p>
+<ol type="1">
+<li><strong>入院登記</strong>：護理站人員輸入病患基本資訊</li>
+<li><strong>規則預篩</strong>：先經過醫師制定的規則引擎篩選</li>
+<li><strong>模型預測</strong>：通過規則引擎後，交由 ML
+模型進行信心度預測</li>
+<li><strong>結果合併</strong>：綜合規則結果與模型預測，產出最終分流建議</li>
+<li><strong>結果展示</strong>：在儀表板上顯示分流結果、信心度與主要影響因子</li>
+</ol>
+<h3 id="預測結果範例">預測結果範例</h3>
+<p>以下為一筆模擬預測的 API 呼叫範例：</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Call the triage prediction API</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-X</span> POST https://ehpts.example.com/api/v1/predict <span class="dt">\</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&quot;Content-Type: application/json&quot;</span> <span class="dt">\</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;patient_id&quot;: &quot;P20260301-001&quot;,</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;age&quot;: 72,</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;length_of_stay&quot;: 5,</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;icu_days&quot;: 0,</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;department_code&quot;: &quot;03&quot;,</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;twdrg_note&quot;: &quot;C&quot;</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="st">  }&#39;</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Expected response:</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="co"># {</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a><span class="co">#   &quot;hospital_label&quot;: 1,</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="co">#   &quot;confidence&quot;: 0.94,</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a><span class="co">#   &quot;top_factors&quot;: [&quot;age&quot;, &quot;length_of_stay&quot;, &quot;twdrg_note&quot;]</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a><span class="co"># }</span></span></code></pre></div>
+<hr />
+<h2 id="專案時程規劃">專案時程規劃</h2>
+<h3 id="甘特圖">甘特圖</h3>
+<div class="mermaid">
+gantt
+    title EHPTS 專案時程表
+    dateFormat  YYYY-MM-DD
+    axisFormat  %Y/%m
+
+    section 第一階段：資料準備
+    資料收集與清洗           :done, a1, 2025-09-01, 2025-09-30
+    標籤規則設計             :done, a2, 2025-09-15, 2025-10-15
+    資料品質驗證             :done, a3, 2025-10-01, 2025-10-31
+
+    section 第二階段：分析與建模
+    探索性資料分析           :done, b1, 2025-10-15, 2025-11-30
+    統計檢定                 :active, b2, 2025-11-15, 2026-01-31
+    Random Forest 建模       :active, b3, 2025-12-01, 2026-02-28
+    模型調校與驗證           :b4, 2026-02-01, 2026-03-31
+
+    section 第三階段：系統開發
+    API 服務開發             :c1, 2026-03-01, 2026-04-30
+    前端 UI 設計             :c2, 2026-03-15, 2026-05-15
+    整合測試                 :c3, 2026-05-01, 2026-06-15
+
+    section 第四階段：部署上線
+    試運行與回饋收集         :d1, 2026-06-01, 2026-07-31
+    正式上線                 :milestone, d2, 2026-08-01, 0d
+    持續監控與優化           :d3, 2026-08-01, 2026-12-31
+</div>
+<h3 id="里程碑摘要">里程碑摘要</h3>
+<table>
+<colgroup>
+<col style="width: 22%" />
+<col style="width: 27%" />
+<col style="width: 22%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>里程碑</th>
+<th>預計日期</th>
+<th>交付物</th>
+<th>驗收標準</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>M1</strong> — 資料就緒</td>
+<td>2025/10/31</td>
+<td>清洗後資料集與標籤欄位</td>
+<td>資料完整率 <span class="math inline">\(\geq 95\%\)</span></td>
+</tr>
+<tr>
+<td><strong>M2</strong> — 分析完成</td>
+<td>2026/01/31</td>
+<td>群體特徵報告與統計結果</td>
+<td>報告涵蓋所有 53 個特徵</td>
+</tr>
+<tr>
+<td><strong>M3</strong> — 模型就緒</td>
+<td>2026/03/31</td>
+<td>訓練好的 RF 模型與評估報告</td>
+<td>F1-score <span class="math inline">\(\geq 0.90\)</span></td>
+</tr>
+<tr>
+<td><strong>M4</strong> — 系統上線</td>
+<td>2026/08/01</td>
+<td>完整分流預測系統</td>
+<td>預測延遲 <span class="math inline">\(\leq 200\)</span> ms</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="預算規劃">預算規劃</h2>
+<h3 id="總預算概估">總預算概估</h3>
+<p>所有金額單位為<strong>新台幣（NTD）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>細項</th>
+<th style="text-align: right;">單價</th>
+<th style="text-align: right;">數量</th>
+<th style="text-align: right;">小計</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>人力成本</strong></td>
+<td>資料科學家</td>
+<td style="text-align: right;">80,000/月</td>
+<td style="text-align: right;">12 個月</td>
+<td style="text-align: right;">960,000</td>
+</tr>
+<tr>
+<td></td>
+<td>後端工程師</td>
+<td style="text-align: right;">70,000/月</td>
+<td style="text-align: right;">6 個月</td>
+<td style="text-align: right;">420,000</td>
+</tr>
+<tr>
+<td></td>
+<td>前端工程師</td>
+<td style="text-align: right;">65,000/月</td>
+<td style="text-align: right;">4 個月</td>
+<td style="text-align: right;">260,000</td>
+</tr>
+<tr>
+<td><strong>計算資源</strong></td>
+<td>GPU 伺服器租用（訓練）</td>
+<td style="text-align: right;">15,000/月</td>
+<td style="text-align: right;">6 個月</td>
+<td style="text-align: right;">90,000</td>
+</tr>
+<tr>
+<td></td>
+<td>雲端部署（AWS / GCP）</td>
+<td style="text-align: right;">10,000/月</td>
+<td style="text-align: right;">12 個月</td>
+<td style="text-align: right;">120,000</td>
+</tr>
+<tr>
+<td><strong>軟體授權</strong></td>
+<td>資料視覺化工具</td>
+<td style="text-align: right;">30,000/年</td>
+<td style="text-align: right;">1 年</td>
+<td style="text-align: right;">30,000</td>
+</tr>
+<tr>
+<td><strong>雜支</strong></td>
+<td>會議、差旅、耗材</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">50,000</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"><strong>總計</strong></td>
+<td style="text-align: right;"><strong>1,930,000</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="成本效益分析">成本效益分析</h3>
+<p>以現行資料規模估算，若系統每月可協助正確分流 <strong>500
+例</strong>住院案件，每案平均節省健保差額的
+<strong>10%</strong>（保守估計），則年度節省金額為：</p>
+<p><span class="math display">\[\text{Annual Saving} = 500 \times 12
+\times 88{,}635 \times 0.1 \approx 53{,}181{,}000 \text{
+NTD}\]</span></p>
+<p>投資報酬率估算：</p>
+<p><span class="math display">\[\text{ROI} = \frac{53{,}181{,}000 -
+1{,}930{,}000}{1{,}930{,}000} \times 100\% \approx
+2{,}655\%\]</span></p>
+<blockquote>
+<p>即使實際節省比例僅達估算的
+<strong>十分之一</strong>，投資報酬率仍超過
+200%，顯示本計畫具有極高的經濟效益潛力。</p>
+</blockquote>
+<hr />
+<h2 id="預期效益與風險評估">預期效益與風險評估</h2>
+<h3 id="預期效益">預期效益</h3>
+<ul class="task-list">
+<li><label><input type="checkbox"
+checked="" /><strong>分類速度提升</strong>：從人工判斷（分鐘級）提升至系統預測（秒級），效率提升超過
+100 倍</label></li>
+<li><label><input type="checkbox"
+checked="" /><strong>一致性保障</strong>：消除因醫師個人判斷差異導致的分類不一致問題</label></li>
+<li><label><input type="checkbox"
+checked="" /><strong>特徵洞察</strong>：揭示入院年齡、加護病房使用率、診察費等關鍵分流因子</label></li>
+<li><label><input
+type="checkbox" /><strong>成本優化</strong>：透過精準分流降低健保支出浪費（待驗證）</label></li>
+<li><label><input
+type="checkbox" /><strong>擴展性</strong>：模型可推廣至其他合作醫療機構（待驗證）</label></li>
+<li><label><input
+type="checkbox" /><strong>即時監控</strong>：建立分流品質儀表板，持續追蹤系統表現（規劃中）</label></li>
+</ul>
+<h3 id="風險評估矩陣">風險評估矩陣</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>風險項目</th>
+<th style="text-align: center;">發生機率</th>
+<th style="text-align: center;">影響程度</th>
+<th>緩解策略</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>資料品質不佳導致模型偏差</td>
+<td style="text-align: center;">Medium</td>
+<td style="text-align: center;">High</td>
+<td>建立自動化資料清洗管線，設置品質監控告警</td>
+</tr>
+<tr>
+<td>模型過擬合（Overfitting）</td>
+<td style="text-align: center;">Medium</td>
+<td style="text-align: center;">Medium</td>
+<td>採用 Stratified k-fold 交叉驗證 + L2 正則化</td>
+</tr>
+<tr>
+<td>醫護人員對系統接受度低</td>
+<td style="text-align: center;">Low</td>
+<td style="text-align: center;">High</td>
+<td>提供 SHAP 可解釋性報告，讓醫師理解模型邏輯</td>
+</tr>
+<tr>
+<td>法規合規風險（醫療資料保護）</td>
+<td style="text-align: center;">Low</td>
+<td style="text-align: center;">High</td>
+<td>資料去識別化處理，諮詢醫療法律顧問</td>
+</tr>
+<tr>
+<td>系統效能瓶頸（高峰時段）</td>
+<td style="text-align: center;">Low</td>
+<td style="text-align: center;">Medium</td>
+<td>導入 Redis 快取機制 + 負載均衡架構</td>
+</tr>
+</tbody>
+</table>
+<h3 id="風險象限圖">風險象限圖</h3>
+<div class="mermaid">
+graph TB
+    subgraph HighImpact ["⬆ High Impact"]
+        direction LR
+        R1["🟡 User Acceptance(Low Prob / High Impact)"]
+        R2["🟡 Compliance(Low Prob / High Impact)"]
+        R3["🔴 Data Quality(Med Prob / High Impact)"]
+    end
+
+    subgraph MedImpact ["■ Medium Impact"]
+        direction LR
+        R4["🟢 Performance(Low Prob / Med Impact)"]
+        R5["🟠 Overfitting(Med Prob / Med Impact)"]
+    end
+
+    style HighImpact fill:#FEF3C7,stroke:#D97706,color:#92400E
+    style MedImpact fill:#DBEAFE,stroke:#2563EB,color:#1E40AF
+    style R1 fill:#FEF9C3,stroke:#CA8A04,color:#713F12
+    style R2 fill:#FEF9C3,stroke:#CA8A04,color:#713F12
+    style R3 fill:#FEE2E2,stroke:#DC2626,color:#7F1D1D
+    style R4 fill:#D1FAE5,stroke:#059669,color:#064E3B
+    style R5 fill:#FFEDD5,stroke:#EA580C,color:#7C2D12
+</div>
+<hr />
+<h2 id="結論與展望">結論與展望</h2>
+<h3 id="結論">結論</h3>
+<p>本提案計畫書完整描述了<strong>智慧老人醫院病患分流預測系統</strong>的建構動機、方法論、初步成果與實施規劃。核心發現包括：</p>
+<ol type="1">
+<li><strong>入院年齡</strong>是兩群體間最具區辨力的單一特徵（Cohen’s
+<span class="math inline">\(d = -1.686\)</span>，RF 重要性 54.78%）</li>
+<li>兩群體在<strong>醫療費用</strong>（每案差距約 88,635 元）和
+<strong>ICU 使用率</strong>（差距 21.8 倍）上存在巨大差異</li>
+<li>現行規則有效但存在優化空間，<strong>TwDRGs
+特殊註記</strong>（Cramer’s <span class="math inline">\(V =
+0.476\)</span>）、<strong>出院科別</strong>等類別特徵可作為輔助分流依據</li>
+</ol>
+<h3 id="未來展望">未來展望</h3>
+<p>本計畫完成後，預計可延伸至以下方向：</p>
+<ol type="1">
+<li><strong>Deep Learning 強化</strong>：以 <em>Neural Network</em>（如
+<code>TabNet</code>、<code>FT-Transformer</code>）捕捉更複雜的非線性特徵交互</li>
+<li><strong>多院區聯邦學習</strong>：在保護病患隱私的前提下，整合多間醫院資料進行
+<code>Federated Learning</code> 聯合建模</li>
+<li><strong>即時串流預測</strong>：結合 <code>Apache Kafka</code> +
+<code>Ray Serve</code> 實現即時入院分流管線</li>
+<li><strong>LLM
+輔助解釋</strong>：利用大型語言模型自動產生分流決策的自然語言解釋報告</li>
+</ol>
+<h3 id="技術展望路線圖">技術展望路線圖</h3>
+<div class="mermaid">
+timeline
+    title EHPTS 技術演進路線
+    2025 Q3-Q4 : 資料收集與清洗
+                : 標籤規則設計
+                : 探索性分析
+    2026 Q1-Q2 : 統計檢定完成
+                : Random Forest 模型
+                : API 服務開發
+    2026 Q3-Q4 : 系統正式上線
+                : 前端儀表板
+                : 持續監控優化
+    2027 Q1-Q2 : Deep Learning 模型
+                : 聯邦學習整合
+                : LLM 輔助解釋
+</div>
+<blockquote>
+<p>資料驅動的醫療決策，不是取代醫師的直覺，而是為直覺提供堅實的證據支撐。</p>
+</blockquote>
+<hr />
+<h2 id="參考資料">參考資料</h2>
+<ol type="1">
+<li><a
+href="https://www.ndc.gov.tw/Content_List.aspx?n=695E69E28C6AC7F3">國家發展委員會
+— 中華民國人口推估（2024 至 2070 年）</a></li>
+<li><a
+href="https://www.nhi.gov.tw/ch/np-1582-1.html">衛生福利部中央健康保險署
+— TwDRGs 支付制度說明</a></li>
+<li><a
+href="https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html">scikit-learn
+— RandomForestClassifier API Reference</a></li>
+<li><a
+href="https://docs.scipy.org/doc/scipy/reference/stats.html">SciPy —
+Statistical Functions Reference</a></li>
+<li><a href="https://fastapi.tiangolo.com/">FastAPI — Modern Python Web
+Framework</a></li>
+<li><a href="https://mermaid.js.org/">Mermaid — JavaScript-based
+Diagramming Tool</a></li>
+<li>Cohen, J. (1988). <em>Statistical Power Analysis for the Behavioral
+Sciences</em> (2nd ed.). Lawrence Erlbaum Associates.</li>
+<li>Cramer, H. (1946). <em>Mathematical Methods of Statistics</em>.
+Princeton University Press.</li>
+<li>Breiman, L. (2001). Random Forests. <em>Machine Learning</em>,
+45(1), 5–32. <a href="https://doi.org/10.1023/A:1010933404324">DOI:
+10.1023/A:1010933404324</a></li>
+</ol>
+<hr />
+<blockquote>
+<p><strong>文件結尾</strong> 本文件以 Markdown 撰寫，可透過 Pandoc 或
+Python-Markdown 渲染為 PDF 與 HTML。
+本文件核心創意與資料分析由作者完成，AI 工具用於輔助文字編排與語法檢查。
+最後更新：2026 年 3 月</p>
+</blockquote>
+</body>
+</html>
